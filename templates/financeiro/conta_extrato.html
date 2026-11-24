@@ -1,0 +1,84 @@
+{% extends "base.html" %}{% load fin %}
+{% block titulo %}Extrato · {{ conta.nome }}{% endblock %}
+{% block conteudo %}
+<div class="page-head">
+  <div>
+    <h1>{{ conta.nome }}</h1>
+    <div class="small text-body-secondary">
+      {{ conta.titular }}{% if conta.banco %} · {{ conta.banco }}{% endif %} · saldo hoje <strong class="{{ saldo_atual|neg }}">{{ saldo_atual|brl }}</strong>
+      {% if conta.conciliado_ate %} · conciliado até {{ conta.conciliado_ate|date:"d/m/Y" }}{% endif %}
+      {% if conta.bloqueado_ate %} · <span class="text-warning-emphasis">bloqueado até {{ conta.bloqueado_ate|date:"d/m/Y" }}</span>{% endif %}
+    </div>
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    {% include "financeiro/_mes_nav.html" %}
+    <a class="btn btn-outline-secondary" href="{% url 'config_editar' 'contas' conta.pk %}" title="Editar conta"><i class="bi bi-pencil"></i></a>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="post" action="{% url 'conta_conciliar' conta.pk %}" class="row g-2 align-items-center">
+      {% csrf_token %}
+      <div class="col-auto small fw-medium">Conciliar pagos até:</div>
+      <div class="col-auto"><input class="form-control form-control-sm" type="date" name="ate" value="{{ hoje|date:'Y-m-d' }}"></div>
+      <div class="col-auto">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="bloquear" value="1" id="chk-bloquear">
+          <label class="form-check-label small" for="chk-bloquear">Também bloquear edições até esta data</label>
+        </div>
+      </div>
+      <div class="col-auto ms-auto"><button class="btn btn-sm btn-outline-primary"><i class="bi bi-check2-all"></i> Conciliar conta</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="table-responsive">
+    <table class="table mb-0">
+      <thead><tr><th>Data</th><th>Descrição</th><th class="text-end">Valor</th><th class="text-end">Saldo</th></tr></thead>
+      <tbody>
+        <tr class="table-light"><td></td><td class="fw-medium">Saldo anterior</td><td></td><td class="text-end fw-semibold {{ saldo_anterior|neg }}">{{ saldo_anterior|brl }}</td></tr>
+        {% for x in linhas %}
+          {% if x.marco_inicial %}
+          <tr class="table-light">
+            <td class="tabular">{{ x.data|date:"d/m" }}</td>
+            <td class="fw-medium">Saldo inicial cadastrado</td>
+            <td class="text-end">{{ x.valor|brl }}</td>
+            <td class="text-end fw-semibold {{ x.saldo|neg }}">{{ x.saldo|brl }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td class="tabular">{{ x.l.data_pagamento|date:"d/m" }}</td>
+            <td>
+              <a class="text-reset" href="{% if x.l.tipo == 'F' %}{% url 'fatura' x.l.fatura_paga_id %}{% else %}{% url 'lancamento_editar' x.l.pk %}?next={{ request.get_full_path|urlencode }}{% endif %}">{{ x.l.descricao }}</a>
+              {% if x.l.conciliado %} <i class="bi bi-check2-all text-primary" title="Conciliado"></i>{% endif %}
+              <div class="small text-body-secondary">{% if x.l.tipo == "T" %}{% if x.valor > 0 %}de {{ x.l.conta.nome }}{% else %}para {{ x.l.conta_destino.nome }}{% endif %}{% else %}{{ x.l.categoria|default:x.l.get_tipo_display }}{% endif %}</div>
+            </td>
+            <td class="text-end {% if x.valor < 0 %}text-danger{% else %}text-success{% endif %}">{{ x.valor|brl }}</td>
+            <td class="text-end {{ x.saldo|neg }}">{{ x.saldo|brl }}</td>
+          </tr>
+          {% endif %}
+        {% empty %}
+        <tr><td colspan="4" class="text-center text-body-secondary py-3">Sem movimentações pagas neste mês.</td></tr>
+        {% endfor %}
+        <tr class="table-light"><td></td><td class="fw-medium">Saldo no fim do mês</td><td></td><td class="text-end fw-bold {{ saldo_final|neg }}">{{ saldo_final|brl }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if pendentes %}
+<div class="card">
+  <div class="card-header">Pendentes nesta conta (até o fim do mês)</div>
+  <ul class="list-group list-group-flush">
+    {% for l in pendentes %}
+    <li class="list-group-item d-flex justify-content-between gap-2">
+      <span><span class="tabular text-body-secondary">{{ l.vencimento|date:"d/m" }}</span> · <a class="text-reset" href="{% url 'lancamento_editar' l.pk %}?next={{ request.get_full_path|urlencode }}">{{ l.descricao }}</a></span>
+      <span class="valor {% if l.entrada_nesta_conta %}text-success{% else %}text-danger{% endif %}">{% if l.entrada_nesta_conta %}+{% else %}−{% endif %}{{ l.valor|brl }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+{% endblock %}

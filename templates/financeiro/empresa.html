@@ -1,0 +1,111 @@
+{% extends "base.html" %}{% load fin static %}
+{% block titulo %}Empresa{% endblock %}
+{% block conteudo %}
+{% if not centro %}
+<div class="page-head"><h1>Empresa</h1></div>
+<div class="alert alert-info d-flex flex-wrap align-items-center justify-content-between gap-2">
+  <div>Nenhuma empresa cadastrada ainda. Marque um centro de custo como <strong>“é empresa”</strong> em <a href="{% url 'config_lista' 'centros' %}">Configurações › Centros de custo</a> para ativar este relatório.</div>
+  <a class="btn btn-sm btn-primary" href="{% url 'config_novo' 'centros' %}">Cadastrar empresa</a>
+</div>
+{% else %}
+<div class="page-head">
+  <div>
+    <h1>{{ centro.nome }}</h1>
+    {% if centros|length > 1 %}<div class="small">{% for c in centros %}<a class="me-2 {% if c.pk == centro.pk %}fw-bold{% endif %}" href="?centro={{ c.pk }}&mes={{ nav.atual }}">{{ c.nome }}</a>{% endfor %}</div>{% endif %}
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    {% include "financeiro/_mes_nav.html" %}
+    <a class="btn btn-success" href="{% url 'lancamento_novo' %}?tipo=R&centro={{ centro.pk }}&next={{ request.get_full_path|urlencode }}"><i class="bi bi-plus-lg"></i> Entrada</a>
+    <a class="btn btn-danger" href="{% url 'lancamento_novo' %}?tipo=D&centro={{ centro.pk }}&next={{ request.get_full_path|urlencode }}"><i class="bi bi-dash-lg"></i> Saída</a>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="kpi-label">Entradas no mês</div><div class="kpi text-success">{{ atual.entradas|brl }}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="kpi-label">Saídas no mês</div><div class="kpi text-danger">{{ atual.saidas|brl }}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="kpi-label">Impostos no mês</div><div class="kpi text-warning-emphasis">{{ atual.impostos|brl }}</div><div class="small text-body-secondary">{{ total_impostos_ano|brl }} em {{ ini.year }}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="kpi-label">Resultado do mês</div><div class="kpi {% if atual.resultado < 0 %}text-danger{% else %}text-success{% endif %}">{{ atual.resultado|brl }}</div>{% if atual.retiradas or atual.aportes %}<div class="small text-body-secondary">retiradas: {{ atual.retiradas|brl }}{% if atual.aportes %} · aportes: {{ atual.aportes|brl }}{% endif %}</div>{% endif %}</div></div></div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-8 d-flex flex-column gap-3">
+    <div class="card"><div class="card-header">Últimos 12 meses</div><div class="card-body"><div class="chart-box"><canvas id="graficoEmpresa"></canvas></div></div></div>
+    <div class="card">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead><tr><th>Mês</th><th class="text-end">Entradas</th><th class="text-end">Saídas</th><th class="text-end">Impostos</th><th class="text-end">Resultado</th><th class="text-end d-none d-md-table-cell">Retiradas</th><th class="text-end d-none d-xl-table-cell">Aportes</th></tr></thead>
+          <tbody>
+          {% for m in meses %}
+            <tr><td class="text-capitalize"><a href="?centro={{ centro.pk }}&mes={{ m.mes|date:'Y-m' }}">{{ m.mes|date:"M/Y" }}</a></td><td class="text-end">{{ m.entradas|brl }}</td><td class="text-end">{{ m.saidas|brl }}</td><td class="text-end">{{ m.impostos|brl }}</td><td class="text-end fw-semibold {{ m.resultado|neg }}">{{ m.resultado|brl }}</td><td class="text-end d-none d-md-table-cell text-body-secondary">{{ m.retiradas|brl }}</td><td class="text-end d-none d-xl-table-cell text-body-secondary">{{ m.aportes|brl }}</td></tr>
+          {% endfor %}
+          </tbody>
+          <tfoot><tr><th>Total</th><th class="text-end">{{ totais.entradas|brl }}</th><th class="text-end">{{ totais.saidas|brl }}</th><th class="text-end">{{ totais.impostos|brl }}</th><th class="text-end {{ totais.resultado|neg }}">{{ totais.resultado|brl }}</th><th class="text-end d-none d-md-table-cell">{{ totais.retiradas|brl }}</th><th class="text-end d-none d-xl-table-cell">{{ totais.aportes|brl }}</th></tr></tfoot>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">Movimentações de <span class="text-capitalize">{{ ini|date:"F" }}</span></div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <tbody>
+          {% for l in do_mes %}
+            <tr>
+              <td class="tabular">{{ l.data|date:"d/m" }}</td>
+              <td><a class="text-reset" href="{% url 'lancamento_editar' l.pk %}?next={{ request.get_full_path|urlencode }}">{{ l.descricao }}</a><div class="small text-body-secondary">{{ l.categoria|default:"" }}</div></td>
+              <td class="text-end fw-semibold {{ l.tipo|cor_tipo }}">{{ l.tipo|sinal_tipo }}{{ l.valor|brl }}</td>
+              <td>{% situacao l %}</td>
+            </tr>
+          {% empty %}<tr><td colspan="4" class="text-center text-body-secondary py-3">Sem movimentações neste mês.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4 d-flex flex-column gap-3">
+    <div class="card">
+      <div class="card-header">Contas da empresa</div>
+      <ul class="list-group list-group-flush">
+        {% for c in contas %}<li class="list-group-item d-flex justify-content-between"><a class="text-reset" href="{% url 'conta_extrato' c.pk %}">{{ c.nome }}</a><span class="valor {{ c.saldo_atual|neg }}">{{ c.saldo_atual|brl }}</span></li>
+        {% empty %}<li class="list-group-item small text-body-secondary">Defina o centro de custo padrão “{{ centro.nome }}” na conta bancária da empresa para vê-la aqui e preencher o centro automaticamente.</li>{% endfor %}
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-header">Impostos em {{ ini.year }}</div>
+      <ul class="list-group list-group-flush small">
+        {% for l in impostos_ano %}
+        <li class="list-group-item d-flex justify-content-between gap-2">
+          <span><span class="tabular text-body-secondary">{{ l.data|date:"d/m" }}</span> · <a class="text-reset" href="{% url 'lancamento_editar' l.pk %}?next={{ request.get_full_path|urlencode }}">{{ l.categoria.nome }}</a>{% if not l.pago %} <span class="badge {% if l.situacao == 'atrasado' %}bg-danger-subtle text-danger-emphasis{% else %}bg-warning-subtle text-warning-emphasis{% endif %}">{{ l.situacao }}</span>{% endif %}</span>
+          <span class="valor">{{ l.valor|brl }}</span>
+        </li>
+        {% empty %}<li class="list-group-item text-body-secondary">Nenhum imposto lançado. Dica: crie o DAS como recorrência mensal na categoria Impostos.</li>{% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+{{ grafico|json_script:"dados-empresa" }}
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if centro %}
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
+<script>
+(() => {
+  const d = JSON.parse(document.getElementById('dados-empresa').textContent);
+  const escuro = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+  Chart.defaults.color = escuro ? '#cbd5e1' : '#475569';
+  Chart.defaults.borderColor = escuro ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.06)';
+  const brl = v => v.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+  new Chart(document.getElementById('graficoEmpresa'), {
+    type: 'bar',
+    data: { labels: d.labels, datasets: [
+      { label: 'Entradas', data: d.entradas, backgroundColor: '#16a34a', borderRadius: 4, stack: 'e' },
+      { label: 'Saídas', data: d.saidas, backgroundColor: '#dc2626', borderRadius: 4, stack: 's' },
+      { label: 'Impostos', data: d.impostos, backgroundColor: '#d97706', borderRadius: 4, stack: 's' },
+    ]},
+    options: { maintainAspectRatio: false, scales: { x: { stacked: true }, y: { stacked: true, ticks: { callback: v => brl(v) } } },
+      plugins: { tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${brl(c.parsed.y)}` } } } }
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

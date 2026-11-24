@@ -1,0 +1,149 @@
+{% extends "base.html" %}{% load fin %}
+{% block titulo %}Lançamentos{% endblock %}
+{% block conteudo %}
+<div class="page-head">
+  <h1>Lançamentos</h1>
+  <div class="d-flex flex-wrap gap-2">
+    {% if not todos %}{% include "financeiro/_mes_nav.html" %}{% endif %}
+    <div class="btn-group">
+      <a class="btn btn-primary" href="{% url 'lancamento_novo' %}?tipo=D&next={{ request.get_full_path|urlencode }}"><i class="bi bi-dash-circle"></i> Despesa</a>
+      <button class="btn btn-primary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-label="Mais opções"></button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li><a class="dropdown-item" href="{% url 'lancamento_novo' %}?tipo=R&next={{ request.get_full_path|urlencode }}"><i class="bi bi-plus-circle text-success"></i> Receita</a></li>
+        <li><a class="dropdown-item" href="{% url 'lancamento_novo' %}?tipo=D&forma=cartao&next={{ request.get_full_path|urlencode }}"><i class="bi bi-credit-card"></i> Compra no cartão</a></li>
+        <li><a class="dropdown-item" href="{% url 'lancamento_novo' %}?tipo=E&next={{ request.get_full_path|urlencode }}"><i class="bi bi-arrow-return-left text-info"></i> Estorno / reembolso</a></li>
+        <li><a class="dropdown-item" href="{% url 'lancamento_novo' %}?tipo=T&next={{ request.get_full_path|urlencode }}"><i class="bi bi-arrow-left-right text-primary"></i> Transferência</a></li>
+        <li><hr class="dropdown-divider"></li>
+        <li><a class="dropdown-item" href="{% url 'importar_extrato' %}"><i class="bi bi-upload"></i> Importar extrato (OFX/CSV)</a></li>
+        <li><a class="dropdown-item" href="{% url 'lancamentos_csv' %}?{{ querystring }}"><i class="bi bi-filetype-csv"></i> Exportar CSV</a></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-body py-2">
+    <form method="get" class="row g-2 align-items-end">
+      <input type="hidden" name="mes" value="{% if todos %}todos{% else %}{{ nav.atual }}{% endif %}">
+      <div class="col-12 col-md-3"><input class="form-control form-control-sm" type="search" name="q" value="{{ f.q }}" placeholder="Buscar descrição…"></div>
+      <div class="col-6 col-md-2">
+        <select class="form-select form-select-sm" name="tipo">
+          <option value="">Todos os tipos</option>
+          <option value="R" {% if f.tipo == "R" %}selected{% endif %}>Receitas</option>
+          <option value="D" {% if f.tipo == "D" %}selected{% endif %}>Despesas</option>
+          <option value="E" {% if f.tipo == "E" %}selected{% endif %}>Estornos</option>
+          <option value="T" {% if f.tipo == "T" %}selected{% endif %}>Transferências</option>
+          <option value="F" {% if f.tipo == "F" %}selected{% endif %}>Pagamentos de fatura</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <select class="form-select form-select-sm" name="situacao">
+          <option value="">Qualquer situação</option>
+          <option value="pago" {% if f.situacao == "pago" %}selected{% endif %}>Pagos</option>
+          <option value="pendente" {% if f.situacao == "pendente" %}selected{% endif %}>Pendentes</option>
+          <option value="atrasado" {% if f.situacao == "atrasado" %}selected{% endif %}>Atrasados</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <select class="form-select form-select-sm" name="conta">
+          <option value="">Todas as contas</option>
+          {% for c in contas %}<option value="{{ c.pk }}" {% if f.conta == c.pk|stringformat:"s" %}selected{% endif %}>{{ c }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <select class="form-select form-select-sm" name="cartao">
+          <option value="">Todos os cartões</option>
+          {% for c in cartoes %}<option value="{{ c.pk }}" {% if f.cartao == c.pk|stringformat:"s" %}selected{% endif %}>{{ c }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-3">
+        <select class="form-select form-select-sm" name="categoria">
+          <option value="">Todas as categorias</option>
+          {% for c in categorias %}<option value="{{ c.pk }}" {% if f.categoria == c.pk|stringformat:"s" %}selected{% endif %}>{% if c.pai_id %}&nbsp;&nbsp;{% endif %}{{ c }} ({{ c.tipo }})</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <select class="form-select form-select-sm" name="centro">
+          <option value="">Todos os centros</option>
+          {% for c in centros %}<option value="{{ c.pk }}" {% if f.centro == c.pk|stringformat:"s" %}selected{% endif %}>{{ c }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <select class="form-select form-select-sm" name="criado_por">
+          <option value="">Qualquer usuário</option>
+          {% for u in usuarios %}<option value="{{ u.pk }}" {% if f.criado_por == u.pk|stringformat:"s" %}selected{% endif %}>{{ u.first_name|default:u.username }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <select class="form-select form-select-sm" name="conciliado">
+          <option value="">Conciliação</option>
+          <option value="sim" {% if f.conciliado == "sim" %}selected{% endif %}>Conciliados</option>
+          <option value="nao" {% if f.conciliado == "nao" %}selected{% endif %}>Não conciliados</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-3 d-flex gap-2">
+        <button class="btn btn-sm btn-outline-primary"><i class="bi bi-funnel"></i> Filtrar</button>
+        {% if filtros_ativos %}<a class="btn btn-sm btn-link" href="?mes={{ nav.atual }}">limpar</a>{% endif %}
+        {% if todos %}<a class="btn btn-sm btn-link ms-auto" href="?{% if querystring_sem_mes %}{{ querystring_sem_mes }}&{% endif %}mes={{ nav.atual }}">ver por mês</a>{% else %}<a class="btn btn-sm btn-link ms-auto" href="?{% if querystring_sem_mes %}{{ querystring_sem_mes }}&{% endif %}mes=todos">todos os meses</a>{% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="d-flex flex-wrap gap-3 mb-2 small">
+  <span>Receitas: <strong class="text-success">{{ receitas|brl }}</strong></span>
+  <span>Despesas líquidas: <strong class="text-danger">{{ despesas|brl }}</strong></span>
+  <span class="text-body-secondary">{{ pagina.paginator.count }} lançamento(s)</span>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr><th>Data</th><th>Descrição</th><th class="d-none d-md-table-cell">Conta / cartão</th><th class="d-none d-lg-table-cell">Centro / Usuário</th><th class="text-end">Valor</th><th>Situação</th><th></th></tr></thead>
+      <tbody>
+      {% for l in pagina %}
+        <tr>
+          <td class="tabular">{{ l.data|date:"d/m" }}</td>
+          <td style="min-width:12rem">
+            <a class="text-reset fw-medium" href="{% url 'lancamento_editar' l.pk %}?next={{ request.get_full_path|urlencode }}">{{ l.descricao }}</a>
+            {% if l.parcela %}<span class="badge text-bg-secondary ms-1">{{ l.parcela_label }}</span>{% endif %}
+            {% if l.recorrencia_id %}<i class="bi bi-arrow-repeat text-body-secondary" title="Recorrente"></i>{% endif %}
+            {% if l.comprovante %}<a href="{% url 'lancamento_comprovante' l.pk %}" target="_blank" title="Ver comprovante" class="ms-1 text-body-secondary"><i class="bi bi-paperclip"></i></a>{% endif %}
+            <div class="small text-body-secondary">{% if l.tipo == "T" %}{{ l.conta.nome }} → {{ l.conta_destino.nome }}{% elif l.categoria %}{{ l.categoria }}{% else %}{{ l.get_tipo_display }}{% endif %}</div>
+          </td>
+          <td class="d-none d-md-table-cell small">{% if l.cartao %}<i class="bi bi-credit-card"></i> {{ l.cartao }}{% elif l.conta %}{{ l.conta }}{% endif %}</td>
+          <td class="d-none d-lg-table-cell small">
+            <div>{{ l.centro|default:"" }}</div>
+            {% if l.criado_por %}<div class="text-body-secondary" style="font-size:.75rem">por {{ l.criado_por.first_name|default:l.criado_por.username }}{% if l.atualizado_por and l.atualizado_por != l.criado_por %} · ed. {{ l.atualizado_por.first_name|default:l.atualizado_por.username }}{% endif %}</div>{% endif %}
+          </td>
+          <td class="text-end fw-semibold {{ l.tipo|cor_tipo }}">{{ l.tipo|sinal_tipo }}{{ l.valor|brl }}</td>
+          <td>{% situacao l %}</td>
+          <td class="text-end text-nowrap">
+            {% if not l.cartao_id and l.tipo != "F" %}
+            <form method="post" action="{% url 'lancamento_pagar' l.pk %}" class="d-inline">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+              <button class="btn btn-sm {% if l.pago %}btn-link text-body-secondary{% else %}btn-outline-success{% endif %}" title="{% if l.pago %}Voltar para pendente{% else %}Marcar como pago{% endif %}"><i class="bi {% if l.pago %}bi-arrow-counterclockwise{% else %}bi-check-lg{% endif %}"></i></button>
+            </form>
+            {% endif %}
+            {% if l.pago and not l.cartao_id %}
+            <form method="post" action="{% url 'lancamento_conciliar' l.pk %}" class="d-inline">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+              <button class="btn btn-sm btn-link {% if l.conciliado %}text-primary{% else %}text-body-secondary{% endif %}" title="{% if l.conciliado %}Desconciliar{% else %}Conciliar{% endif %}"><i class="bi bi-check2-all"></i></button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7" class="text-center text-body-secondary py-4">Nenhum lançamento encontrado.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if pagina.has_other_pages %}
+<nav class="mt-3"><ul class="pagination pagination-sm justify-content-center">
+  {% if pagina.has_previous %}<li class="page-item"><a class="page-link" href="?{{ querystring }}&page={{ pagina.previous_page_number }}">Anterior</a></li>{% endif %}
+  <li class="page-item disabled"><span class="page-link">{{ pagina.number }} de {{ pagina.paginator.num_pages }}</span></li>
+  {% if pagina.has_next %}<li class="page-item"><a class="page-link" href="?{{ querystring }}&page={{ pagina.next_page_number }}">Próxima</a></li>{% endif %}
+</ul></nav>
+{% endif %}
+{% endblock %}

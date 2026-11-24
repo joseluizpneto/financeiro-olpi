@@ -1,0 +1,104 @@
+{% extends "base.html" %}{% load fin %}
+{% block titulo %}Veículo{% endblock %}
+{% block conteudo %}
+{% if not v %}
+<div class="page-head"><h1>Veículo</h1></div>
+<div class="card"><div class="card-body text-center py-5">
+  <i class="bi bi-car-front fs-1 text-body-secondary"></i>
+  <p class="mt-2">Cadastre o veículo para controlar combustível, consumo, manutenções, IPVA, seguro e licenciamento.</p>
+  <a class="btn btn-primary" href="{% url 'config_novo' 'veiculos' %}">Cadastrar veículo</a>
+</div></div>
+{% else %}
+<div class="page-head">
+  <div>
+    <h1>{{ v.nome }}</h1>
+    <div class="small text-body-secondary">{{ v.marca }} {{ v.modelo }}{% if v.ano %} · {{ v.ano }}{% endif %}{% if v.placa %} · {{ v.placa }}{% endif %}
+      {% for o in outros %} · <a href="{% url 'veiculo_detalhe' o.pk %}">{{ o.nome }}</a>{% endfor %}</div>
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    <a class="btn btn-primary" href="{% url 'abastecimento_novo' v.pk %}"><i class="bi bi-fuel-pump"></i> Abastecer</a>
+    <a class="btn btn-outline-primary" href="{% url 'manutencao_nova' v.pk %}"><i class="bi bi-tools"></i> Manutenção</a>
+    <a class="btn btn-outline-secondary" href="{% url 'lancamento_novo' %}?tipo=D&veiculo={{ v.pk }}{% if categoria_veiculo %}&categoria={{ categoria_veiculo.pk }}{% endif %}&next={{ request.get_full_path|urlencode }}" title="IPVA, seguro, licenciamento, multas…"><i class="bi bi-receipt"></i> Outra despesa</a>
+    <a class="btn btn-outline-secondary" href="{% url 'config_editar' 'veiculos' v.pk %}" title="Editar veículo"><i class="bi bi-pencil"></i></a>
+  </div>
+</div>
+
+{% for a in alertas %}
+<div class="alert {% if a.vencido %}alert-danger{% else %}alert-warning{% endif %} py-2"><i class="bi bi-wrench-adjustable"></i> <strong>{{ a.manutencao.servico }}</strong>: {{ a.texto }}</div>
+{% endfor %}
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="kpi-label">Hodômetro</div><div class="kpi">{{ km_atual|num:0 }} km</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="kpi-label">Consumo médio</div><div class="kpi">{% if media %}{{ media|num }} km/l{% else %}—{% endif %}</div><div class="small text-body-secondary">entre tanques cheios</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="kpi-label">Combustível no mês</div><div class="kpi">{{ resumo.combustivel_mes|brl }}</div>{% if ultimo %}<div class="small text-body-secondary">último: R$ {{ ultimo.preco_litro|num:3 }}/l</div>{% endif %}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="kpi-label">Custo em {{ ano }}</div><div class="kpi">{{ resumo.total|brl }}</div><div class="small text-body-secondary">{% if resumo.custo_km %}{{ resumo.custo_km|brl }}/km · {{ resumo.rodado|num:0 }} km{% else %}tudo que foi lançado no veículo{% endif %}</div></div></div></div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-7 d-flex flex-column gap-3">
+    <div class="card">
+      <div class="card-header">Abastecimentos</div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead><tr><th>Data</th><th class="text-end">Km</th><th class="text-end">Litros</th><th class="text-end">Valor</th><th class="text-end">R$/l</th><th class="text-end">km/l</th></tr></thead>
+          <tbody>
+          {% for a in abastecimentos %}
+            <tr>
+              <td><a class="text-reset" href="{% url 'abastecimento_editar' a.pk %}">{{ a.data|date:"d/m/y" }}</a> <span class="small text-body-secondary">{{ a.get_combustivel_display }}{% if not a.tanque_cheio %} · parcial{% endif %}</span></td>
+              <td class="text-end">{{ a.km|num:0 }}</td>
+              <td class="text-end">{{ a.litros|num }}</td>
+              <td class="text-end">{{ a.valor_total|brl }}</td>
+              <td class="text-end">{{ a.preco_litro|num:3 }}</td>
+              <td class="text-end fw-semibold">{% if a.km_l %}{{ a.km_l|num }}{% else %}—{% endif %}</td>
+            </tr>
+          {% empty %}<tr><td colspan="6" class="text-center text-body-secondary py-3">Nenhum abastecimento ainda.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">Manutenções</div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead><tr><th>Data</th><th>Serviço</th><th class="text-end">Km</th><th class="text-end">Valor</th><th>Próxima</th></tr></thead>
+          <tbody>
+          {% for m in manutencoes %}
+            <tr>
+              <td class="tabular">{{ m.data|date:"d/m/y" }}</td>
+              <td><a class="text-reset" href="{% url 'manutencao_editar' m.pk %}">{{ m.servico }}</a>{% if m.oficina %}<div class="small text-body-secondary">{{ m.oficina }}</div>{% endif %}</td>
+              <td class="text-end">{{ m.km|num:0 }}</td>
+              <td class="text-end">{{ m.valor|brl }}</td>
+              <td class="small">{% if m.proxima_km %}{{ m.proxima_km|num:0 }} km{% endif %}{% if m.proxima_km and m.proxima_data %} ou {% endif %}{% if m.proxima_data %}{{ m.proxima_data|date:"d/m/Y" }}{% endif %}</td>
+            </tr>
+          {% empty %}<tr><td colspan="5" class="text-center text-body-secondary py-3">Nenhuma manutenção registrada.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5 d-flex flex-column gap-3">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Custos em {{ ano }}</span>
+        <span class="btn-group btn-group-sm"><a class="btn btn-outline-secondary" href="?ano={{ ano|add:-1 }}"><i class="bi bi-chevron-left"></i></a><a class="btn btn-outline-secondary" href="?ano={{ ano|add:1 }}"><i class="bi bi-chevron-right"></i></a></span>
+      </div>
+      <ul class="list-group list-group-flush">
+        {% for c in resumo.por_categoria %}<li class="list-group-item d-flex justify-content-between"><span>{{ c.nome }}</span><span class="valor">{{ c.t|brl }}</span></li>
+        {% empty %}<li class="list-group-item small text-body-secondary">Sem despesas no ano.</li>{% endfor %}
+      </ul>
+    </div>
+    <div class="card">
+      <div class="card-header">Lançamentos do veículo em {{ ano }}</div>
+      <ul class="list-group list-group-flush small">
+        {% for l in lancamentos %}
+        <li class="list-group-item d-flex justify-content-between gap-2">
+          <span><span class="tabular text-body-secondary">{{ l.data|date:"d/m" }}</span> · <a class="text-reset" href="{% url 'lancamento_editar' l.pk %}?next={{ request.get_full_path|urlencode }}">{{ l.descricao }}</a>{% if not l.pago %} <span class="badge bg-warning-subtle text-warning-emphasis">pendente</span>{% endif %}</span>
+          <span class="valor">{{ l.valor|brl }}</span>
+        </li>
+        {% empty %}<li class="list-group-item text-body-secondary">IPVA, seguro e licenciamento entram aqui: use “Outra despesa” ou crie uma recorrência anual.</li>{% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

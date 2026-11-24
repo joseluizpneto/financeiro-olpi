@@ -1,0 +1,86 @@
+from .api import api_resumo, manifest_pwa
+from .cartoes import cartoes, fatura, fatura_mes, fatura_pagar
+from .config import config_excluir, config_form, config_index, config_lista, regra_excluir, regra_form, regras_lista
+from .contas import a_vencer, conta_conciliar, conta_extrato, fechamento_mensal
+from .lancamentos import (
+    comprovante_download, exportar_csv, importar_extrato, lancamento_conciliar, lancamento_excluir,
+    lancamento_form, lancamento_pagar, lancamentos,
+)
+from .orcamento import meta_excluir, meta_form, metas, orcamento, orcamento_excluir, orcamento_form
+from .painel import dashboard, fluxo_caixa
+from .painel_admin import (
+    admin_atualizacao_aplicar, admin_atualizacao_cancelar, admin_atualizacao_status,
+    admin_atualizacao_verificar, admin_atualizacoes, admin_auditoria, admin_desbloquear_login,
+    admin_integracao_testar_telegram, admin_integracoes, admin_painel, admin_sessao_encerrar,
+    admin_sessoes, admin_sistema_acao, admin_token_revogar, admin_tokens, admin_usuario_criar,
+    admin_usuario_editar, admin_usuario_senha, admin_usuarios,
+)
+from .recorrencias import recorrencia_excluir, recorrencia_form, recorrencias
+from .relatorios import empresa, rateio, relatorios
+from .veiculo import abastecimento_excluir, abastecimento_form, manutencao_excluir, manutencao_form, veiculo
+
+__all__ = [
+    "dashboard",
+    "fluxo_caixa",
+    "lancamentos",
+    "lancamento_form",
+    "lancamento_excluir",
+    "lancamento_pagar",
+    "lancamento_conciliar",
+    "exportar_csv",
+    "comprovante_download",
+    "importar_extrato",
+    "a_vencer",
+    "conta_extrato",
+    "conta_conciliar",
+    "fechamento_mensal",
+    "cartoes",
+    "fatura",
+    "fatura_mes",
+    "fatura_pagar",
+    "recorrencias",
+    "recorrencia_form",
+    "recorrencia_excluir",
+    "orcamento",
+    "orcamento_form",
+    "orcamento_excluir",
+    "metas",
+    "meta_form",
+    "meta_excluir",
+    "veiculo",
+    "abastecimento_form",
+    "abastecimento_excluir",
+    "manutencao_form",
+    "manutencao_excluir",
+    "empresa",
+    "relatorios",
+    "rateio",
+    "config_index",
+    "config_lista",
+    "config_form",
+    "config_excluir",
+    "regras_lista",
+    "regra_form",
+    "regra_excluir",
+    "admin_painel",
+    "admin_usuarios",
+    "admin_usuario_criar",
+    "admin_usuario_editar",
+    "admin_usuario_senha",
+    "admin_sessoes",
+    "admin_sessao_encerrar",
+    "admin_desbloquear_login",
+    "admin_integracoes",
+    "admin_integracao_testar_telegram",
+    "admin_tokens",
+    "admin_token_revogar",
+    "admin_auditoria",
+    "admin_sistema_acao",
+    "admin_atualizacoes",
+    "admin_atualizacao_verificar",
+    "admin_atualizacao_aplicar",
+    "admin_atualizacao_cancelar",
+    "admin_atualizacao_status",
+    "api_resumo",
+    "manifest_pwa",
+]

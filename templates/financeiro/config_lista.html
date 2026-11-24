@@ -1,0 +1,36 @@
+{% extends "base.html" %}{% load fin %}
+{% block titulo %}{{ cfg.titulo }}{% endblock %}
+{% block conteudo %}
+<div class="page-head">
+  <div>
+    <h1><i class="bi bi-{{ cfg.icone }} text-primary"></i> {{ cfg.titulo }}</h1>
+    <div class="small text-body-secondary">{{ cfg.descricao }}</div>
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary" href="{% url 'config' %}"><i class="bi bi-arrow-left"></i></a>
+    <a class="btn btn-primary" href="{% url 'config_novo' slug %}"><i class="bi bi-plus-lg"></i> Novo</a>
+  </div>
+</div>
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr>{% for nome, rotulo in colunas %}<th class="{% if nome == 'saldo_inicial' or nome == 'saldo_atual' or nome == 'limite' %}text-end{% endif %}">{{ rotulo }}</th>{% endfor %}<th></th></tr></thead>
+      <tbody>
+      {% for o in objetos %}
+        <tr class="{% if not o.ativo %}text-body-secondary{% endif %}">
+          {% for nome, rotulo in colunas %}
+          <td class="{% if nome == 'saldo_inicial' or nome == 'saldo_atual' or nome == 'limite' %}text-end{% endif %}">{% if forloop.first %}<a class="fw-medium {% if o.ativo %}text-reset{% else %}text-body-secondary{% endif %}" href="{% url 'config_editar' slug o.pk %}">{% if nome == "__str__" and o.pai_id %}<span class="text-body-secondary ms-3">↳ </span>{{ o.nome }}{% else %}{{ o|attr:nome }}{% endif %}</a>{% else %}{{ o|attr:nome }}{% endif %}</td>
+          {% endfor %}
+          <td class="text-end text-nowrap">
+            {% if slug == "contas" %}<a class="btn btn-sm btn-link" href="{% url 'conta_extrato' o.pk %}">extrato</a>{% endif %}
+            <a class="btn btn-sm btn-link" href="{% url 'config_editar' slug o.pk %}"><i class="bi bi-pencil"></i></a>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="{{ colunas|length|add:1 }}" class="text-center text-body-secondary py-4">Nenhum cadastro ainda.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

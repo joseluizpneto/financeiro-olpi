@@ -1,0 +1,5 @@
+<div class="btn-group" role="group" aria-label="Mês">
+  <a class="btn btn-outline-secondary" href="?{{ nav.qs_anterior }}" aria-label="Mês anterior"><i class="bi bi-chevron-left"></i></a>
+  <a class="btn btn-outline-secondary" style="min-width:10rem" href="?{{ nav.qs_hoje }}" title="Voltar ao mês atual">{{ nav.mes|date:"F \d\e Y"|capfirst }}</a>
+  <a class="btn btn-outline-secondary" href="?{{ nav.qs_proximo }}" aria-label="Próximo mês"><i class="bi bi-chevron-right"></i></a>
+</div>

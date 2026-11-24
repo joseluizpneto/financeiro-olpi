@@ -1,0 +1,37 @@
+{% extends "base.html" %}{% load fin %}
+{% block titulo %}Recorrentes{% endblock %}
+{% block conteudo %}
+<div class="page-head">
+  <h1>Despesas e receitas recorrentes</h1>
+  <div class="btn-group">
+    <a class="btn btn-primary" href="{% url 'recorrencia_nova' %}?tipo=D"><i class="bi bi-plus-lg"></i> Nova despesa fixa</a>
+    <a class="btn btn-outline-primary" href="{% url 'recorrencia_nova' %}?tipo=R">Receita fixa</a>
+  </div>
+</div>
+<div class="row g-3 mb-3">
+  <div class="col-6 col-md-3"><div class="card"><div class="card-body"><div class="kpi-label">Despesas fixas / mês</div><div class="kpi text-danger">{{ mensal_despesas|brl }}</div></div></div></div>
+  <div class="col-6 col-md-3"><div class="card"><div class="card-body"><div class="kpi-label">Receitas fixas / mês</div><div class="kpi text-success">{{ mensal_receitas|brl }}</div></div></div></div>
+</div>
+<p class="small text-body-secondary">O sistema cria automaticamente os lançamentos dos próximos 45 dias. Eles aparecem como pendentes em “A vencer” (ou direto na fatura, se for no cartão).</p>
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr><th>Descrição</th><th>Frequência</th><th class="d-none d-md-table-cell">Pagar com</th><th class="text-end">Valor</th><th>Próxima</th></tr></thead>
+      <tbody>
+      {% for r in itens %}
+        <tr class="{% if not r.ativo %}text-body-secondary{% endif %}">
+          <td><a class="text-reset fw-medium" href="{% url 'recorrencia_editar' r.pk %}">{{ r.descricao }}</a>{% if not r.ativo %} <span class="badge text-bg-light border">inativa</span>{% endif %}
+            <div class="small text-body-secondary">{{ r.categoria|default:"" }}{% if r.centro %} · {{ r.centro }}{% endif %}</div></td>
+          <td class="small">{{ r.get_intervalo_meses_display }} · dia {{ r.dia }}</td>
+          <td class="d-none d-md-table-cell small">{% if r.cartao %}<i class="bi bi-credit-card"></i> {{ r.cartao }}{% else %}{{ r.conta }}{% endif %}</td>
+          <td class="text-end fw-semibold {{ r.tipo|cor_tipo }}">{{ r.tipo|sinal_tipo }}{{ r.valor|brl }}</td>
+          <td class="tabular small">{{ r.proxima_data|date:"d/m/Y"|default:"—" }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5" class="text-center text-body-secondary py-4">Cadastre aluguel, internet, plano de saúde, salário… tudo que se repete.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

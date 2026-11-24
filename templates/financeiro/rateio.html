@@ -1,0 +1,70 @@
+{% extends "base.html" %}{% load fin %}
+{% block titulo %}Rateio entre titulares{% endblock %}
+{% block conteudo %}
+<div class="page-head">
+  <div>
+    <h1>Rateio entre titulares</h1>
+    <div class="btn-group btn-group-sm mt-1">
+      <a class="btn {% if modo == 'igual' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="?mes={{ nav.atual }}&modo=igual&casa={% if incluir_casa %}1{% else %}0{% endif %}">Divisão 50/50</a>
+      <a class="btn {% if modo == 'renda' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="?mes={{ nav.atual }}&modo=renda&casa={% if incluir_casa %}1{% else %}0{% endif %}">Proporcional à renda</a>
+      <a class="btn {% if incluir_casa %}btn-outline-primary active{% else %}btn-outline-secondary{% endif %}" href="?mes={{ nav.atual }}&modo={{ modo }}&casa={% if incluir_casa %}0{% else %}1{% endif %}">{% if incluir_casa %}Casa + marcados{% else %}Só marcados{% endif %}</a>
+    </div>
+  </div>
+  {% include "financeiro/_mes_nav.html" %}
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-4"><div class="card h-100"><div class="card-body"><div class="kpi-label">Total compartilhado no mês</div><div class="kpi">{{ total|brl }}</div></div></div></div>
+  <div class="col-md-8"><div class="card h-100"><div class="card-body">
+    <div class="kpi-label mb-1">Acerto sugerido</div>
+    {% if acertos %}
+      {% for a in acertos %}
+        <div class="fs-5 fw-semibold"><span class="text-danger">{{ a.de.nome }}</span> → <span class="text-success">{{ a.para.nome }}</span>: <strong class="tabular">{{ a.valor|brl }}</strong></div>
+      {% endfor %}
+    {% else %}
+      <div class="text-body-secondary">Contas equilibradas ou sem despesas compartilhadas neste mês.</div>
+    {% endif %}
+  </div></div></div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header">Resumo por titular{% if tem_empresa %} (PF){% endif %}</div>
+  <div class="table-responsive">
+    <table class="table mb-0">
+      <thead><tr><th>Titular</th><th class="text-end">Cota (%)</th><th class="text-end">Deveria pagar</th><th class="text-end">Pagou</th><th class="text-end">Diferença</th></tr></thead>
+      <tbody>
+      {% for p in participantes %}
+        <tr>
+          <td class="fw-medium">{{ p.titular.nome }}</td>
+          <td class="text-end">{{ p.pct }}%</td>
+          <td class="text-end">{{ p.cota|brl }}</td>
+          <td class="text-end">{{ p.pago|brl }}</td>
+          <td class="text-end fw-semibold {% if p.saldo < 0 %}text-danger{% elif p.saldo > 0 %}text-success{% endif %}">{{ p.saldo|brl }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">Lançamentos considerados ({{ itens|length }})</div>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover mb-0">
+      <thead><tr><th>Data</th><th>Descrição</th><th>Pago por</th><th class="text-end">Valor</th></tr></thead>
+      <tbody>
+      {% for l in itens %}
+        <tr>
+          <td class="tabular">{{ l.data|date:"d/m" }}</td>
+          <td><a class="text-reset" href="{% url 'lancamento_editar' l.pk %}?next={{ request.get_full_path|urlencode }}">{{ l.descricao }}</a></td>
+          <td class="small">{{ l.pago_por|default:l.meio.titular|default:"—" }}</td>
+          <td class="text-end {{ l.tipo|cor_tipo }}">{{ l.tipo|sinal_tipo }}{{ l.valor|brl }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="4" class="text-center text-body-secondary py-3">Nenhuma despesa compartilhada neste mês.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

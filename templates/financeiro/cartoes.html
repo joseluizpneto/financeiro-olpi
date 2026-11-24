@@ -1,0 +1,63 @@
+{% extends "base.html" %}{% load fin %}
+{% block titulo %}Cartões{% endblock %}
+{% block conteudo %}
+<div class="page-head">
+  <h1>Cartões de crédito</h1>
+  <div class="d-flex gap-2">
+    <a class="btn btn-primary" href="{% url 'lancamento_novo' %}?tipo=D&forma=cartao&next={{ request.get_full_path|urlencode }}"><i class="bi bi-bag-plus"></i> Compra no cartão</a>
+    <a class="btn btn-outline-secondary" href="{% url 'config_lista' 'cartoes' %}"><i class="bi bi-gear"></i></a>
+  </div>
+</div>
+{% if not dados %}
+<div class="card"><div class="card-body text-center py-5">
+  <i class="bi bi-credit-card fs-1 text-body-secondary"></i>
+  <p class="mt-2">Nenhum cartão cadastrado ainda.</p>
+  <a class="btn btn-primary" href="{% url 'config_novo' 'cartoes' %}">Cadastrar cartão</a>
+</div></div>
+{% endif %}
+<div class="row g-3">
+{% for d in dados %}
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-credit-card"></i> {{ d.cartao.nome }} <span class="small text-body-secondary fw-normal">· {{ d.cartao.titular }}</span></span>
+        <span class="small text-body-secondary fw-normal">fecha dia {{ d.cartao.dia_fechamento }} · vence dia {{ d.cartao.dia_vencimento }}</span>
+      </div>
+      <div class="card-body">
+        <div class="row g-2 mb-3">
+          <div class="col-4"><div class="kpi-label">Fatura atual</div><div class="fw-bold fs-5 tabular">{{ d.atual.total|brl }}</div></div>
+          <div class="col-4"><div class="kpi-label">Limite usado</div><div class="fw-bold fs-5 tabular">{{ d.usado|brl }}</div></div>
+          <div class="col-4"><div class="kpi-label">Disponível</div><div class="fw-bold fs-5 tabular {{ d.disponivel|neg }}">{{ d.disponivel|brl }}</div></div>
+        </div>
+        {% if d.cartao.limite %}<div class="progress mb-3"><div class="progress-bar {% if d.pct >= 90 %}bg-danger{% elif d.pct >= 70 %}bg-warning{% endif %}" style="width: {{ d.pct|limitar }}%"></div></div>{% endif %}
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Fatura</th><th>Vence</th><th class="text-end">Total</th><th>Situação</th></tr></thead>
+          <tbody>
+          {% for f in d.faturas %}
+            <tr {% if f.pk == d.atual.pk %}class="table-active"{% endif %}>
+              <td><a href="{% url 'fatura' f.pk %}" class="text-capitalize">{{ f.referencia|date:"M/Y" }}</a></td>
+              <td class="tabular">{{ f.vencimento|date:"d/m" }}</td>
+              <td class="text-end">{{ f.total|brl }}</td>
+              <td>
+                {% if f.situacao == "Paga" %}<span class="badge bg-success-subtle text-success-emphasis">paga</span>
+                {% elif f.situacao == "Vencida" %}<span class="badge bg-danger-subtle text-danger-emphasis">vencida</span>
+                {% elif f.situacao == "Fechada" %}<span class="badge bg-warning-subtle text-warning-emphasis">fechada</span>
+                {% else %}<span class="badge text-bg-light border">aberta</span>{% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td><a href="{% url 'fatura_mes' d.cartao.pk d.atual.referencia|date:'Y-m' %}" class="text-capitalize">{{ d.atual.referencia|date:"M/Y" }}</a></td>
+              <td class="tabular">{{ d.atual.vencimento|date:"d/m" }}</td>
+              <td class="text-end">{{ d.atual.total|brl }}</td>
+              <td><span class="badge text-bg-light border">aberta</span></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+{% endfor %}
+</div>
+{% endblock %}

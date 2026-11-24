@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block titulo %}{{ titulo }}{% endblock %}
+{% block conteudo %}
+<div class="row justify-content-center">
+  <div class="col-lg-7 col-xl-6">
+    <div class="page-head">
+      <h1>{{ titulo }}</h1>
+      <div class="d-flex gap-2">
+        {% if duplicar_url %}<a class="btn btn-sm btn-outline-primary" href="{{ duplicar_url }}"><i class="bi bi-copy"></i> Duplicar</a>{% endif %}
+        <a class="btn btn-sm btn-outline-secondary" href="{{ voltar }}"><i class="bi bi-arrow-left"></i> Voltar</a>
+      </div>
+    </div>
+    {% if aviso %}<div class="alert alert-info py-2 small"><i class="bi bi-info-circle"></i> {{ aviso }}</div>{% endif %}
+    <div class="card"><div class="card-body">
+      <form method="post" enctype="multipart/form-data" id="form-principal">{% csrf_token %}
+        {% if request.GET.next %}<input type="hidden" name="next" value="{{ request.GET.next }}">{% endif %}
+        {% for e in form.non_field_errors %}<div class="alert alert-danger py-2">{{ e }}</div>{% endfor %}
+        {% for campo in form.hidden_fields %}{{ campo }}{% endfor %}
+        {% for campo in form.visible_fields %}{% include "financeiro/_campo.html" %}{% endfor %}
+        {% if auditoria_obj and auditoria_obj.comprovante %}
+        <div class="mb-3 small">
+          <a href="{% url 'lancamento_comprovante' auditoria_obj.pk %}" target="_blank"><i class="bi bi-paperclip"></i> Abrir comprovante anexado</a>
+        </div>
+        {% endif %}
+        <div class="d-flex flex-wrap gap-2 pt-2">
+          <button class="btn btn-primary px-4" type="submit"><i class="bi bi-check-lg"></i> Salvar</button>
+          {% if permitir_salvar_novo %}<button class="btn btn-outline-primary" type="submit" name="acao" value="salvar_novo"><i class="bi bi-plus-circle"></i> Salvar e outro</button>{% endif %}
+          <a class="btn btn-outline-secondary" href="{{ voltar }}">Cancelar</a>
+          {% if excluir_url %}
+          <div class="ms-auto d-flex gap-2">
+            {% if excluir_grupo %}<button class="btn btn-outline-danger" form="form-excluir" name="todas" value="1" type="submit">Excluir todas as parcelas</button>{% endif %}
+            <button class="btn btn-outline-danger" form="form-excluir" type="submit"><i class="bi bi-trash"></i> Excluir</button>
+          </div>
+          {% endif %}
+        </div>
+      </form>
+      {% if excluir_url %}
+      <form id="form-excluir" method="post" action="{{ excluir_url }}" onsubmit="return confirm('Confirma a exclusão?')">{% csrf_token %}</form>
+      {% endif %}
+    </div></div>
+    {% if auditoria_obj and auditoria_obj.pk %}
+    <div class="small text-body-secondary mt-2">
+      {% if auditoria_obj.criado_por %}Lançado por <strong>{{ auditoria_obj.criado_por.first_name|default:auditoria_obj.criado_por.username }}</strong>{% endif %}
+      {% if auditoria_obj.criado_em %} em {{ auditoria_obj.criado_em|date:"d/m/Y H:i" }}{% endif %}
+      {% if auditoria_obj.atualizado_por %} · Última alteração por <strong>{{ auditoria_obj.atualizado_por.first_name|default:auditoria_obj.atualizado_por.username }}</strong> em {{ auditoria_obj.atualizado_em|date:"d/m/Y H:i" }}{% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+{% block fab %}{% endblock %}
+{% block scripts %}
+{% if js_forma %}
+<script>
+(() => {
+  const marcado = (nome) => { const el = document.querySelector(`[name="${nome}"]:checked`); return el ? el.value : null; };
+  const mostrar = (id, sim) => { const b = document.getElementById('bloco-' + id); if (b) b.classList.toggle('d-none', !sim); };
+  const temTipo = !!document.querySelector('[name="tipo"]');
+  function atualizar() {
+    const tipo = marcado('tipo') || 'D';
+    const forma = marcado('forma') || 'conta';
+    const transf = tipo === 'T';
+    const cartao = !transf && forma === 'cartao';
+    mostrar('forma', !transf);
+    mostrar('conta', !cartao);
+    mostrar('cartao', cartao);
+    mostrar('conta_destino', transf);
+    mostrar('categoria', !transf);
+    mostrar('parcelas', cartao && tipo === 'D');
+    mostrar('pago', !cartao);
+    mostrar('vencimento', !cartao && !transf);
+    mostrar('compartilhado', !transf);
+    mostrar('pago_por', !transf);
+    const lblConta = document.querySelector('label[for="id_conta"]');
+    if (lblConta && temTipo) lblConta.firstChild.textContent = transf ? 'Conta de origem' : 'Conta';
+    const lblPago = document.querySelector('label[for="id_pago"]');
+    if (lblPago) lblPago.textContent = tipo === 'R' || tipo === 'E' ? 'Já foi recebido' : (transf ? 'Já foi feita' : 'Já foi pago');
+    const sel = document.getElementById('id_categoria');
+    if (sel && temTipo) {
+      const tipoCat = tipo === 'E' ? 'D' : tipo;
+      for (const o of sel.options) {
+        if (!o.value) continue;
+        const ok = o.dataset.tipo === tipoCat;
+        o.hidden = !ok; o.disabled = !ok;
+      }
+      if (sel.selectedOptions[0] && sel.selectedOptions[0].disabled) sel.value = '';
+    }
+  }
+  document.querySelectorAll('[name="tipo"],[name="forma"]').forEach(e => e.addEventListener('change', atualizar));
+  atualizar();
+})();
+</script>
+{% endif %}
+{% endblock %}

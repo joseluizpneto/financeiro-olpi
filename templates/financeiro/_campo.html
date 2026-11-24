@@ -1,0 +1,31 @@
+<div id="bloco-{{ campo.name }}" class="mb-3">
+{% if campo.field.widget.input_type == "checkbox" %}
+  <div class="form-check form-switch">
+    {{ campo }}
+    <label class="form-check-label" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+  </div>
+{% elif campo.field.widget.input_type == "radio" and campo.name == "tipo" %}
+  <div class="btn-group w-100" role="group" aria-label="{{ campo.label }}">
+    {% for r in campo %}
+    <input type="radio" class="btn-check" name="{{ r.data.name }}" id="{{ r.id_for_label }}" value="{{ r.data.value }}" {% if r.data.selected %}checked{% endif %} autocomplete="off">
+    <label class="btn {% if r.data.value == 'R' %}btn-outline-success{% elif r.data.value == 'D' %}btn-outline-danger{% elif r.data.value == 'E' %}btn-outline-info{% else %}btn-outline-primary{% endif %}" for="{{ r.id_for_label }}">{{ r.choice_label }}</label>
+    {% endfor %}
+  </div>
+{% elif campo.field.widget.input_type == "radio" %}
+  <label class="form-label d-block">{{ campo.label }}</label>
+  {% for r in campo %}
+  <div class="form-check form-check-inline">{{ r.tag }}<label class="form-check-label" for="{{ r.id_for_label }}">{{ r.choice_label }}</label></div>
+  {% endfor %}
+{% elif campo.field.widget.moeda_brl %}
+  <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}{% if campo.field.required %} <span class="text-danger">*</span>{% endif %}</label>
+  <div class="input-group">
+    <span class="input-group-text">R$</span>
+    {{ campo }}
+  </div>
+{% else %}
+  <label class="form-label" for="{{ campo.id_for_label }}">{{ campo.label }}{% if campo.field.required %} <span class="text-danger">*</span>{% endif %}</label>
+  {{ campo }}
+{% endif %}
+{% if campo.help_text %}<div class="form-text">{{ campo.help_text }}</div>{% endif %}
+{% for e in campo.errors %}<div class="text-danger small mt-1">{{ e }}</div>{% endfor %}
+</div>

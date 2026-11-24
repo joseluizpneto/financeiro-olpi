@@ -1,0 +1,86 @@
+{% extends "base.html" %}{% load fin static %}
+{% block titulo %}Relatórios{% endblock %}
+{% block conteudo %}
+<div class="page-head">
+  <div class="d-flex flex-wrap align-items-center gap-2">
+    <h1>Relatório de {{ ano }}</h1>
+    {% if tem_empresa %}
+    <div class="btn-group btn-group-sm" role="group">
+      <a class="btn {% if escopo == 'todos' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="?ano={{ ano }}&escopo=todos">Consolidado</a>
+      <a class="btn {% if escopo == 'pessoal' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="?ano={{ ano }}&escopo=pessoal">Pessoal (PF)</a>
+      <a class="btn {% if escopo == 'empresa' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="?ano={{ ano }}&escopo=empresa">Empresa (PJ)</a>
+    </div>
+    {% endif %}
+  </div>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-primary" href="{% url 'rateio' %}"><i class="bi bi-people"></i> Rateio</a>
+    <div class="btn-group">
+      <a class="btn btn-outline-secondary" href="?ano={{ ano|add:-1 }}&escopo={{ escopo }}"><i class="bi bi-chevron-left"></i> {{ ano|add:-1 }}</a>
+      <a class="btn btn-outline-secondary" href="?ano={{ ano|add:1 }}&escopo={{ escopo }}">{{ ano|add:1 }} <i class="bi bi-chevron-right"></i></a>
+    </div>
+  </div>
+</div>
+<div class="row g-3 mb-3">
+  <div class="col-4"><div class="card"><div class="card-body"><div class="kpi-label">Receitas</div><div class="kpi text-success">{{ total_receitas|brl }}</div></div></div></div>
+  <div class="col-4"><div class="card"><div class="card-body"><div class="kpi-label">Despesas</div><div class="kpi text-danger">{{ total_despesas|brl }}</div></div></div></div>
+  <div class="col-4"><div class="card"><div class="card-body"><div class="kpi-label">Resultado</div><div class="kpi {% if total_resultado < 0 %}text-danger{% else %}text-success{% endif %}">{{ total_resultado|brl }}</div></div></div></div>
+</div>
+<div class="row g-3">
+  <div class="col-lg-8 d-flex flex-column gap-3">
+    <div class="card"><div class="card-header">Receitas × despesas por mês</div><div class="card-body"><div class="chart-box"><canvas id="graficoAno"></canvas></div></div></div>
+    <div class="card">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0">
+          <thead><tr><th>Mês</th><th class="text-end">Receitas</th><th class="text-end">Despesas</th><th class="text-end">Resultado</th></tr></thead>
+          <tbody>
+          {% for m in meses %}
+            <tr><td class="text-capitalize"><a href="{% url 'dashboard' %}?mes={{ m.mes|date:'Y-m' }}&escopo={{ escopo }}">{{ m.mes|date:"F" }}</a></td><td class="text-end">{{ m.receitas|brl }}</td><td class="text-end">{{ m.despesas|brl }}</td><td class="text-end fw-semibold {{ m.resultado|neg }}">{{ m.resultado|brl }}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4 d-flex flex-column gap-3">
+    <div class="card">
+      <div class="card-header">Por centro de custo</div>
+      <table class="table table-sm mb-0">
+        <thead><tr><th>Centro</th><th class="text-end">Receitas</th><th class="text-end">Despesas</th></tr></thead>
+        <tbody>
+        {% for c in por_centro %}<tr><td>{{ c.nome }}</td><td class="text-end">{{ c.receitas|brl }}</td><td class="text-end">{{ c.despesas|brl }}</td></tr>
+        {% empty %}<tr><td colspan="3" class="text-body-secondary">Sem dados.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-header">Despesas por categoria</div>
+      <ul class="list-group list-group-flush small">
+        {% for c in categorias %}<li class="list-group-item d-flex justify-content-between"><span>{{ c.grupo }}</span><span class="valor">{{ c.t|brl }}</span></li>
+        {% empty %}<li class="list-group-item text-body-secondary">Sem despesas no ano.</li>{% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+{{ grafico|json_script:"dados-ano" }}
+{% endblock %}
+{% block scripts %}
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
+<script>
+(() => {
+  const d = JSON.parse(document.getElementById('dados-ano').textContent);
+  const brl = v => v.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+  const escuro = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+  Chart.defaults.color = escuro ? '#cbd5e1' : '#475569';
+  Chart.defaults.borderColor = escuro ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.06)';
+  new Chart(document.getElementById('graficoAno'), {
+    type: 'bar',
+    data: { labels: d.labels, datasets: [
+      { label: 'Receitas', data: d.receitas, backgroundColor: '#16a34a', borderRadius: 4 },
+      { label: 'Despesas', data: d.despesas, backgroundColor: '#dc2626', borderRadius: 4 },
+    ]},
+    options: { maintainAspectRatio: false, scales: { y: { ticks: { callback: v => brl(v) } } },
+      plugins: { tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${brl(c.parsed.y)}` } } } }
+  });
+})();
+</script>
+{% endblock %}

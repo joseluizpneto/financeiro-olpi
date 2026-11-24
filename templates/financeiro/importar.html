@@ -1,0 +1,94 @@
+{% extends "base.html" %}{% load fin %}
+{% block titulo %}Importar extrato (OFX/CSV){% endblock %}
+{% block conteudo %}
+<div class="page-head">
+  <h1>Importar extrato (OFX / CSV)</h1>
+  <div class="d-flex gap-2">
+    <a class="btn btn-outline-secondary" href="{% url 'regras_lista' %}"><i class="bi bi-magic"></i> Regras automáticas</a>
+    <a class="btn btn-outline-secondary" href="{% url 'lancamentos' %}"><i class="bi bi-arrow-left"></i> Lançamentos</a>
+  </div>
+</div>
+
+{% if not preview %}
+<div class="row justify-content-center"><div class="col-lg-7">
+  <div class="card"><div class="card-body">
+    <form method="post" enctype="multipart/form-data">{% csrf_token %}
+      {% for e in form.non_field_errors %}<div class="alert alert-danger py-2">{{ e }}</div>{% endfor %}
+      {% for campo in form %}{% include "financeiro/_campo.html" %}{% endfor %}
+      <button class="btn btn-primary"><i class="bi bi-search"></i> Analisar arquivo</button>
+    </form>
+  </div></div>
+</div></div>
+{% else %}
+<div class="alert alert-info d-flex justify-content-between align-items-center">
+  <span>Arquivo analisado para <strong>{{ preview.destino_nome }}</strong> ({{ preview.itens|length }} linha(s)). Itens já importados anteriormente vêm desmarcados automaticamente.</span>
+  <a class="btn btn-sm btn-outline-secondary" href="{% url 'importar_extrato' %}">Trocar arquivo</a>
+</div>
+
+<form method="post">{% csrf_token %}
+  <input type="hidden" name="confirmar" value="1">
+  <div class="card mb-3">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead><tr><th style="width:2.5rem">Inc.</th><th>Data</th><th>Tipo</th><th>Descrição</th><th class="text-end">Valor</th><th>Categoria</th><th>Centro</th></tr></thead>
+        <tbody>
+        {% for item in preview.itens %}
+          <tr class="{% if item.ja_existe %}table-secondary{% endif %}">
+            <td><input class="form-check-input" type="checkbox" name="incluir_{{ forloop.counter0 }}" value="1" {% if not item.ja_existe %}checked{% endif %}></td>
+            <td class="tabular small">{{ item.data }}</td>
+            <td>
+              <select class="form-select form-select-sm" name="tipo_{{ forloop.counter0 }}">
+                <option value="D" {% if item.tipo == "D" %}selected{% endif %}>Despesa</option>
+                <option value="R" {% if item.tipo == "R" %}selected{% endif %}>Receita</option>
+                <option value="E" {% if item.tipo == "E" %}selected{% endif %}>Estorno</option>
+              </select>
+            </td>
+            <td>
+              <input class="form-control form-control-sm" type="text" name="descricao_{{ forloop.counter0 }}" value="{{ item.descricao }}">
+              {% if item.ja_existe %}<span class="badge bg-warning-subtle text-warning-emphasis">já importado antes</span>{% endif %}
+            </td>
+            <td class="text-end valor">{{ item.valor|brl }}</td>
+            <td>
+              <select class="form-select form-select-sm" name="categoria_{{ forloop.counter0 }}">
+                <option value="">—</option>
+                {% for c in categorias %}<option value="{{ c.pk }}" {% if item.categoria_id == c.pk %}selected{% endif %}>{{ c }} ({{ c.tipo }})</option>{% endfor %}
+              </select>
+            </td>
+            <td>
+              <select class="form-select form-select-sm" name="centro_{{ forloop.counter0 }}">
+                <option value="">—</option>
+                {% for c in centros %}<option value="{{ c.pk }}" {% if item.centro_id == c.pk %}selected{% endif %}>{{ c }}</option>{% endfor %}
+              </select>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg"></i> Importar selecionados</button>
+    <a class="btn btn-outline-secondary" href="{% url 'importar_extrato' %}">Cancelar</a>
+  </div>
+</form>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% if not preview %}
+<script>
+(() => {
+  const upd = () => {
+    const f = (document.querySelector('[name="forma"]:checked') || {}).value || 'conta';
+    const bc = document.getElementById('bloco-conta');
+    const bcard = document.getElementById('bloco-cartao');
+    const binv = document.getElementById('bloco-inverter_sinais_cartao');
+    if (bc) bc.classList.toggle('d-none', f === 'cartao');
+    if (bcard) bcard.classList.toggle('d-none', f !== 'cartao');
+    if (binv) binv.classList.toggle('d-none', f !== 'cartao');
+  };
+  document.querySelectorAll('[name="forma"]').forEach(e => e.addEventListener('change', upd));
+  upd();
+})();
+</script>
+{% endif %}
+{% endblock %}

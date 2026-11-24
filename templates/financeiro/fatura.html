@@ -1,0 +1,93 @@
+{% extends "base.html" %}{% load fin %}
+{% block titulo %}Fatura {{ f }}{% endblock %}
+{% block conteudo %}
+<div class="page-head">
+  <div>
+    <h1>Fatura {{ f.cartao.nome }} · <span class="text-capitalize">{{ f.referencia|date:"F/Y" }}</span></h1>
+    <div class="small text-body-secondary">Fecha em {{ f.fechamento|date:"d/m/Y" }} · vence em {{ f.vencimento|date:"d/m/Y" }} · <strong>{{ f.situacao }}</strong></div>
+  </div>
+  <div class="btn-group">
+    <a class="btn btn-outline-secondary" href="{% if anterior %}{% url 'fatura' anterior.pk %}{% else %}{% url 'fatura_mes' f.cartao.pk anterior_ref|date:'Y-m' %}{% endif %}"><i class="bi bi-chevron-left"></i> anterior</a>
+    <a class="btn btn-outline-secondary" href="{% if proxima %}{% url 'fatura' proxima.pk %}{% else %}{% url 'fatura_mes' f.cartao.pk proxima_ref|date:'Y-m' %}{% endif %}">próxima <i class="bi bi-chevron-right"></i></a>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Compras ({{ itens|length }})</span>
+        <a class="btn btn-sm btn-outline-primary" href="{% url 'lancamento_novo' %}?tipo=D&cartao={{ f.cartao.pk }}&next={{ request.get_full_path|urlencode }}"><i class="bi bi-plus"></i> Compra</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead><tr><th>Data</th><th>Descrição</th><th class="d-none d-md-table-cell">Categoria</th><th class="text-end">Valor</th></tr></thead>
+          <tbody>
+          {% for l in itens %}
+            <tr>
+              <td class="tabular">{{ l.data|date:"d/m" }}</td>
+              <td>
+                <a class="text-reset" href="{% url 'lancamento_editar' l.pk %}?next={{ request.get_full_path|urlencode }}">{{ l.descricao }}</a>
+                {% if l.parcela %} <span class="badge text-bg-secondary">{{ l.parcela_label }}</span>{% endif %}
+                {% if l.recorrencia_id %} <i class="bi bi-arrow-repeat text-body-secondary"></i>{% endif %}
+                {% if l.tipo == "E" %} <span class="badge bg-info-subtle text-info-emphasis">estorno</span>{% endif %}
+              </td>
+              <td class="d-none d-md-table-cell small">{{ l.categoria|default:"" }}</td>
+              <td class="text-end {% if l.tipo == 'R' or l.tipo == 'E' %}text-success{% endif %}">{% if l.tipo == "R" or l.tipo == "E" %}−{% endif %}{{ l.valor|brl }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4" class="text-center text-body-secondary py-4">Nenhuma compra nesta fatura.</td></tr>
+          {% endfor %}
+          </tbody>
+          <tfoot><tr><th colspan="3">Total</th><th class="text-end">{{ f.total|brl }}</th></tr></tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-4 d-flex flex-column gap-3">
+    <div class="card"><div class="card-body">
+      <div class="d-flex justify-content-between"><span>Total</span><strong class="tabular">{{ f.total|brl }}</strong></div>
+      <div class="d-flex justify-content-between"><span>Pago</span><strong class="tabular text-success">{{ f.valor_pago|brl }}</strong></div>
+      <hr>
+      <div class="d-flex justify-content-between fs-5"><span>Saldo</span><strong class="tabular {% if f.saldo > 0 %}text-danger{% endif %}">{{ f.saldo|brl }}</strong></div>
+    </div></div>
+
+    {% if f.pk and f.saldo > 0 %}
+    <div class="card">
+      <div class="card-header">Registrar pagamento</div>
+      <div class="card-body">
+        <form method="post" action="{% url 'fatura_pagar' f.pk %}">{% csrf_token %}
+          {% for campo in form %}{% include "financeiro/_campo.html" %}{% endfor %}
+          <button class="btn btn-primary w-100"><i class="bi bi-check2-circle"></i> Pagar fatura</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if pagamentos %}
+    <div class="card">
+      <div class="card-header">Pagamentos</div>
+      <ul class="list-group list-group-flush">
+        {% for p in pagamentos %}
+        <li class="list-group-item d-flex justify-content-between align-items-center gap-2">
+          <span class="small">{{ p.data_pagamento|date:"d/m/Y" }} · {{ p.conta.nome }}</span>
+          <span class="d-flex align-items-center gap-2"><span class="valor">{{ p.valor|brl }}</span>
+            <form method="post" action="{% url 'lancamento_excluir' p.pk %}" onsubmit="return confirm('Desfazer este pagamento?')">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="btn btn-sm btn-link text-danger p-0" title="Desfazer"><i class="bi bi-x-circle"></i></button></form>
+          </span>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    {% if por_categoria %}
+    <div class="card">
+      <div class="card-header">Por categoria</div>
+      <ul class="list-group list-group-flush small">
+        {% for c in por_categoria %}<li class="list-group-item d-flex justify-content-between"><span>{{ c.grupo }}</span><span class="valor">{{ c.t|brl }}</span></li>{% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

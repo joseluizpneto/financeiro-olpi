@@ -1,0 +1,46 @@
+{% extends "base.html" %}{% load fin %}
+{% block titulo %}A vencer{% endblock %}
+{% block conteudo %}
+<div class="page-head">
+  <h1>Contas a vencer</h1>
+  <div class="d-flex gap-3 small">
+    <span>A pagar: <strong class="text-danger">{{ a_pagar|brl }}</strong></span>
+    <span>A receber: <strong class="text-success">{{ a_receber|brl }}</strong></span>
+  </div>
+</div>
+<p class="small text-body-secondary">Lançamentos pendentes e faturas de cartão com vencimento até 30 dias. Transferências agendadas não entram em “A pagar”.</p>
+
+{% for titulo, itens in grupos.items %}
+<div class="card mb-3">
+  <div class="card-header {% if titulo == 'Atrasados' and itens %}text-danger{% endif %}">{{ titulo }} <span class="badge text-bg-light border ms-1">{{ itens|length }}</span></div>
+  {% if itens %}
+  <ul class="list-group list-group-flush">
+    {% for i in itens %}
+    <li class="list-group-item d-flex align-items-center gap-3">
+      <div class="data-badge"><div class="dia {% if i.data < hoje %}text-danger{% endif %}">{{ i.data|date:"d" }}</div><div class="mes">{{ i.data|date:"M" }}</div></div>
+      {% if i.fatura %}
+        <div class="flex-grow-1 min-w-0">
+          <a class="fw-medium text-reset d-block text-truncate" href="{% url 'fatura' i.fatura.pk %}"><i class="bi bi-credit-card"></i> Fatura {{ i.fatura.cartao.nome }} · {{ i.fatura.referencia|date:"m/Y" }}</a>
+          <div class="small text-body-secondary">{{ i.fatura.situacao }}</div>
+        </div>
+        <div class="valor fw-semibold text-danger">{{ i.valor|brl }}</div>
+        <a class="btn btn-sm btn-outline-primary" href="{% url 'fatura' i.fatura.pk %}">Pagar</a>
+      {% else %}
+        <div class="flex-grow-1 min-w-0">
+          <a class="fw-medium text-reset text-truncate d-inline-block mw-100" href="{% url 'lancamento_editar' i.lanc.pk %}?next={{ request.get_full_path|urlencode }}">{{ i.lanc.descricao }}</a>
+          {% if i.lanc.recorrencia_id %}<i class="bi bi-arrow-repeat text-body-secondary" title="Recorrente"></i>{% endif %}
+          {% if i.lanc.tipo == "T" %}<span class="badge text-bg-light border ms-1">transferência</span>{% endif %}
+          <div class="small text-body-secondary text-truncate">{% if i.lanc.tipo == "T" %}{{ i.lanc.conta }} → {{ i.lanc.conta_destino }}{% else %}{{ i.lanc.conta }}{% if i.lanc.categoria %} · {{ i.lanc.categoria }}{% endif %}{% if i.lanc.centro %} · {{ i.lanc.centro }}{% endif %}{% endif %}</div>
+        </div>
+        <div class="valor fw-semibold {{ i.lanc.tipo|cor_tipo }}">{{ i.lanc.tipo|sinal_tipo }}{{ i.valor|brl }}</div>
+        <form method="post" action="{% url 'lancamento_pagar' i.lanc.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <button class="btn btn-sm btn-outline-success"><i class="bi bi-check-lg"></i> <span class="d-none d-sm-inline">{% if i.receita %}Recebido{% elif i.lanc.tipo == "T" %}Feita{% else %}Pago{% endif %}</span></button>
+        </form>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}<div class="card-body small text-body-secondary">Nada aqui.</div>{% endif %}
+</div>
+{% endfor %}
+{% endblock %}

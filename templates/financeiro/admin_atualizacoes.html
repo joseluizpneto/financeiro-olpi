@@ -1,0 +1,256 @@
+{% extends "base.html" %}
+{% block titulo %}Atualizações via Git · Painel Admin{% endblock %}
+{% block conteudo %}
+<div class="page-head"><h1>Atualizações via Git</h1></div>
+{% include "financeiro/_admin_nav.html" %}
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-git text-primary"></i> Versão instalada e verificação</span>
+        {% if versao.agente_ativo %}
+          <span class="badge bg-success-subtle text-success-emphasis">Agente do servidor ativo</span>
+        {% else %}
+          <span class="badge text-bg-light border">Agente aguardando sincronização</span>
+        {% endif %}
+      </div>
+      <div class="card-body d-flex flex-column gap-3">
+        <div class="border rounded p-3 bg-body-tertiary">
+          <div class="row g-2 small">
+            <div class="col-sm-6">
+              <div class="text-body-secondary">Branch</div>
+              <div class="fw-semibold"><code>{{ versao.branch|default:"main" }}</code></div>
+            </div>
+            <div class="col-sm-6">
+              <div class="text-body-secondary">Commit atual</div>
+              <div class="fw-semibold">
+                {% if versao.commit_curto %}
+                  <code>{{ versao.commit_curto }}</code>
+                {% else %}
+                  <span class="text-body-secondary">Não identificado</span>
+                {% endif %}
+              </div>
+            </div>
+            {% if versao.mensagem %}
+            <div class="col-12">
+              <div class="text-body-secondary">Último commit</div>
+              <div>{{ versao.mensagem }}</div>
+            </div>
+            {% endif %}
+            {% if versao.data_commit or versao.autor %}
+            <div class="col-12 text-body-secondary">
+              {% if versao.autor %}{{ versao.autor }}{% endif %}
+              {% if versao.autor and versao.data_commit %} · {% endif %}
+              {% if versao.data_commit %}{{ versao.data_commit|slice:":16" }}{% endif %}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if versao.alteracoes_locais %}
+        <div class="alert alert-warning mb-0 small">
+          <i class="bi bi-exclamation-triangle-fill"></i>
+          <strong>Alterações locais detectadas no servidor.</strong>
+          O repositório no host possui arquivos modificados não commitados; a atualização automática pelo painel fica bloqueada até o servidor estar limpo.
+        </div>
+        {% endif %}
+
+        <form method="post" action="{% url 'admin_atualizacao_verificar' %}">{% csrf_token %}
+          <button class="btn btn-primary" {% if not cfg.repositorio %}disabled{% endif %}>
+            <i class="bi bi-arrow-clockwise"></i> Verificar atualizações agora
+          </button>
+          {% if not cfg.repositorio %}
+            <span class="small text-body-secondary ms-2">Salve o repositório ao lado primeiro.</span>
+          {% endif %}
+        </form>
+
+        {% if ultima %}
+          <hr class="my-1">
+          {% if not ultima.ok %}
+            <div class="alert alert-danger mb-0 small">
+              <i class="bi bi-x-circle-fill"></i> {{ ultima.erro }}
+            </div>
+          {% else %}
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+              <div>
+                {% if ultima.tem_atualizacao %}
+                  <span class="badge bg-warning-subtle text-warning-emphasis">Atualização disponível</span>
+                {% elif ultima.estado == "atualizado" %}
+                  <span class="badge bg-success-subtle text-success-emphasis">Atualizado</span>
+                {% else %}
+                  <span class="badge bg-secondary-subtle text-secondary-emphasis">{{ ultima.estado }}</span>
+                {% endif %}
+                <span class="small fw-medium ms-1">{{ ultima.mensagem_status }}</span>
+              </div>
+              {% if ultima.commit_remoto_curto %}
+                <span class="small text-body-secondary">Remoto: <code>{{ ultima.commit_remoto_curto }}</code></span>
+              {% endif %}
+            </div>
+
+            {% if ultima.tem_migracoes or ultima.tem_dependencias %}
+            <div class="d-flex flex-wrap gap-2">
+              {% if ultima.tem_migracoes %}
+                <span class="badge bg-info-subtle text-info-emphasis"><i class="bi bi-database"></i> Inclui migrações de banco</span>
+              {% endif %}
+              {% if ultima.tem_dependencias %}
+                <span class="badge bg-info-subtle text-info-emphasis"><i class="bi bi-box-seam"></i> Rebuild de imagem / dependências</span>
+              {% endif %}
+            </div>
+            {% endif %}
+
+            {% if ultima.commits %}
+            <div class="table-responsive">
+              <table class="table table-sm mb-0">
+                <thead><tr><th>Commit</th><th>Mensagem</th><th>Autor</th></tr></thead>
+                <tbody>
+                {% for c in ultima.commits %}
+                  <tr>
+                    <td class="small tabular"><code>{{ c.sha_curto }}</code></td>
+                    <td class="small">{{ c.mensagem }}</td>
+                    <td class="small text-body-secondary">{{ c.autor }}</td>
+                  </tr>
+                {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% endif %}
+
+            {% if ultima.tem_atualizacao %}
+            <form method="post" action="{% url 'admin_atualizacao_aplicar' %}" class="border rounded p-3 bg-body-tertiary">
+              {% csrf_token %}
+              <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" name="confirmar" value="1" id="id_confirmar_atualizacao" required {% if not pode_aplicar %}disabled{% endif %}>
+                <label class="form-check-label small" for="id_confirmar_atualizacao">
+                  Autorizo baixar as alterações do Git, reconstruir o container e reiniciar a aplicação (pode causar breve indisponibilidade).
+                </label>
+              </div>
+              <button class="btn btn-warning btn-sm fw-semibold" {% if not pode_aplicar %}disabled{% endif %}>
+                <i class="bi bi-cloud-arrow-down"></i> Permitir e atualizar agora
+              </button>
+              {% if execucao.estado == "pendente" or execucao.estado == "executando" %}
+                <span class="small text-body-secondary ms-2">Já existe uma atualização em andamento.</span>
+              {% endif %}
+            </form>
+            {% endif %}
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-gear text-primary"></i> Configuração do repositório</div>
+      <div class="card-body d-flex flex-column">
+        {% if cfg.token_mascarado %}
+          <div class="alert alert-light border py-1 small mb-3">
+            Token configurado ({% if cfg.token_origem == "painel" %}painel{% else %}.env{% endif %}):
+            <code>{{ cfg.token_mascarado }}</code>
+          </div>
+        {% endif %}
+        <form method="post" class="d-flex flex-column flex-grow-1">{% csrf_token %}
+          {% for campo in form %}{% include "financeiro/_campo.html" %}{% endfor %}
+          <button class="btn btn-primary mt-auto"><i class="bi bi-check-lg"></i> Salvar configuração Git</button>
+        </form>
+
+        <details class="mt-3 small">
+          <summary class="fw-semibold text-primary" style="cursor:pointer;">Como ativar o agente no servidor (Docker Compose)</summary>
+          <div class="mt-2 text-body-secondary">
+            <p class="mb-2">O container não acessa o socket do Docker diretamente. Para aplicar atualizações pelo painel, sincronize uma vez e adicione o worker ao cron do host:</p>
+            <pre class="p-2 border rounded bg-body-tertiary small mb-2">./scripts/atualizar.sh --sync</pre>
+            <pre class="p-2 border rounded bg-body-tertiary small mb-0">* * * * * cd /caminho/do/projeto &amp;&amp; ./scripts/atualizar.sh --daemon &gt;&gt; data/atualizacao/cron.log 2&gt;&amp;1</pre>
+          </div>
+        </details>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if execucao.estado != "ocioso" %}
+<div class="card mt-3" id="card-execucao-git" data-estado="{{ execucao.estado }}">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-terminal"></i> Execução da atualização</span>
+    {% if execucao.estado == "pendente" %}
+      <span class="badge bg-warning-subtle text-warning-emphasis">Pendente</span>
+    {% elif execucao.estado == "executando" %}
+      <span class="badge bg-primary-subtle text-primary-emphasis">Executando</span>
+    {% elif execucao.estado == "concluido" %}
+      <span class="badge bg-success-subtle text-success-emphasis">Concluído</span>
+    {% elif execucao.estado == "erro" %}
+      <span class="badge bg-danger-subtle text-danger-emphasis">Erro</span>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+      <div class="small" id="execucao-etapa">
+        {% if execucao.estado == "pendente" or execucao.estado == "executando" %}
+          <span class="spinner-border spinner-border-sm text-primary me-1" role="status" aria-hidden="true"></span>
+        {% endif %}
+        {{ execucao.etapa|default:"Processando…" }}
+        {% if execucao.commit_anterior and execucao.commit_novo %}
+          · <code>{{ execucao.commit_anterior|slice:":7" }}</code> → <code>{{ execucao.commit_novo|slice:":7" }}</code>
+        {% endif %}
+      </div>
+      {% if execucao.estado == "pendente" %}
+      <form method="post" action="{% url 'admin_atualizacao_cancelar' %}">{% csrf_token %}
+        <button class="btn btn-sm btn-outline-danger"><i class="bi bi-x-lg"></i> Cancelar pedido</button>
+      </form>
+      {% endif %}
+    </div>
+
+    {% if execucao.atrasado %}
+      <div class="alert alert-warning small py-2">
+        O servidor ainda não processou esta solicitação dentro do tempo esperado. Verifique se o cron <code>./scripts/atualizar.sh --daemon</code> está ativo no host.
+      </div>
+    {% endif %}
+    {% if execucao.erro %}
+      <div class="alert alert-danger small py-2">{{ execucao.erro }}</div>
+    {% endif %}
+    {% if execucao.log %}
+      <details {% if execucao.estado == "erro" %}open{% endif %}>
+        <summary class="small fw-semibold" style="cursor:pointer;">Ver log da execução</summary>
+        <pre class="p-2 mt-2 border rounded bg-body-tertiary small mb-0" style="max-height: 260px; overflow:auto;">{{ execucao.log }}</pre>
+      </details>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(() => {
+  const card = document.getElementById('card-execucao-git');
+  if (!card) return;
+  const estadoInicial = card.dataset.estado;
+  if (estadoInicial !== 'pendente' && estadoInicial !== 'executando') return;
+
+  const urlStatus = "{% url 'admin_atualizacao_status' %}";
+  const etapaEl = document.getElementById('execucao-etapa');
+
+  const checar = async () => {
+    try {
+      const resp = await fetch(urlStatus, { credentials: 'same-origin', cache: 'no-store' });
+      if (!resp.ok) {
+        if (etapaEl) etapaEl.textContent = 'Reiniciando serviço web… aguardando reconexão.';
+        return;
+      }
+      const data = await resp.json();
+      const est = (data.execucao && data.execucao.estado) || '';
+      if (est !== 'pendente' && est !== 'executando') {
+        window.location.reload();
+        return;
+      }
+      if (etapaEl && data.execucao && data.execucao.etapa) {
+        etapaEl.textContent = data.execucao.etapa;
+      }
+    } catch (_) {
+      if (etapaEl) etapaEl.textContent = 'Reiniciando container… reconectando.';
+    }
+  };
+
+  setInterval(checar, 4000);
+})();
+</script>
+{% endblock %}

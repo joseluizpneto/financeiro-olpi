@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block titulo %}Tokens de API · Painel Admin{% endblock %}
+{% block conteudo %}
+<div class="page-head"><h1>Tokens de API (Bots, IA e automações)</h1></div>
+{% include "financeiro/_admin_nav.html" %}
+
+{% if novo_token %}
+<div class="alert alert-success">
+  <div class="fw-semibold mb-1">Token criado para “{{ novo_token.nome }}” — copie agora (não será mostrado novamente):</div>
+  <code class="fs-6 user-select-all">{{ novo_token.token }}</code>
+  <div class="small mt-2">Exemplo de uso: <code>Authorization: Bearer {{ novo_token.token }}</code> em <code>GET /api/v1/resumo/</code></div>
+</div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-lg-5">
+    <div class="card"><div class="card-header">Gerar novo token</div><div class="card-body">
+      <form method="post">{% csrf_token %}
+        {% for campo in form %}{% include "financeiro/_campo.html" %}{% endfor %}
+        <button class="btn btn-primary"><i class="bi bi-key"></i> Gerar token</button>
+      </form>
+    </div></div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card"><div class="card-header">Tokens emitidos</div>
+      <div class="table-responsive"><table class="table table-sm mb-0">
+        <thead><tr><th>Nome</th><th>Prefixo</th><th>Usuário</th><th>Último uso</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+        {% for t in tokens %}
+          <tr>
+            <td class="fw-medium">{{ t.nome }}</td>
+            <td><code>{{ t.prefixo }}…</code></td>
+            <td class="small">{{ t.usuario.username }}</td>
+            <td class="small tabular text-body-secondary">{{ t.ultimo_uso|date:"d/m/Y H:i"|default:"Nunca" }}</td>
+            <td>{% if t.ativo %}<span class="badge bg-success-subtle text-success-emphasis">ativo</span>{% else %}<span class="badge bg-secondary-subtle text-secondary-emphasis">revogado</span>{% endif %}</td>
+            <td class="text-end">
+              {% if t.ativo %}
+              <form method="post" action="{% url 'admin_token_revogar' t.pk %}" onsubmit="return confirm('Revogar este token?')">{% csrf_token %}<button class="btn btn-sm btn-outline-danger">Revogar</button></form>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6" class="text-center text-body-secondary py-3">Nenhum token criado ainda.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+{% endblock %}

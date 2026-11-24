@@ -1,0 +1,10 @@
+{% load fin %}
+<ul class="nav nav-pills mb-3 gap-1">
+  <li class="nav-item"><a class="nav-link {% ativo 'admin_painel' %}" href="{% url 'admin_painel' %}"><i class="bi bi-sliders"></i> Visão geral</a></li>
+  <li class="nav-item"><a class="nav-link {% ativo 'admin_usuario' %}" href="{% url 'admin_usuarios' %}"><i class="bi bi-people"></i> Usuários</a></li>
+  <li class="nav-item"><a class="nav-link {% ativo 'admin_integrac' %}" href="{% url 'admin_integracoes' %}"><i class="bi bi-robot"></i> Telegram &amp; IA</a></li>
+  <li class="nav-item"><a class="nav-link {% ativo 'admin_token' %}" href="{% url 'admin_tokens' %}"><i class="bi bi-key-fill"></i> Tokens API</a></li>
+  <li class="nav-item"><a class="nav-link {% ativo 'admin_sesso' %}" href="{% url 'admin_sessoes' %}"><i class="bi bi-shield-check"></i> Sessões &amp; Login</a></li>
+  <li class="nav-item"><a class="nav-link {% ativo 'admin_auditoria' %}" href="{% url 'admin_auditoria' %}"><i class="bi bi-journal-text"></i> Auditoria</a></li>
+  {% if user.is_staff or user.is_superuser %}<li class="nav-item"><a class="nav-link {% ativo 'admin_atualizac' %}" href="{% url 'admin_atualizacoes' %}"><i class="bi bi-cloud-arrow-down"></i> Atualizações</a></li>{% endif %}
+</ul>

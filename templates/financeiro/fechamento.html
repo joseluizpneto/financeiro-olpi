@@ -1,0 +1,65 @@
+{% extends "base.html" %}{% load fin %}
+{% block titulo %}Fechamento mensal{% endblock %}
+{% block conteudo %}
+<div class="page-head">
+  <h1>Fechamento mensal</h1>
+  {% include "financeiro/_mes_nav.html" %}
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-4"><div class="card"><div class="card-body"><div class="kpi-label">Receitas</div><div class="kpi text-success">{{ receitas|brl }}</div></div></div></div>
+  <div class="col-4"><div class="card"><div class="card-body"><div class="kpi-label">Despesas líquidas</div><div class="kpi text-danger">{{ despesas|brl }}</div></div></div></div>
+  <div class="col-4"><div class="card"><div class="card-body"><div class="kpi-label">Resultado</div><div class="kpi {{ resultado|neg }}">{{ resultado|brl }}</div></div></div></div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card mb-3">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Checklist de conferência · <span class="text-capitalize">{{ nav.mes|date:"F/Y" }}</span></span>
+        {% if fechamento and fechamento.fechado %}<span class="badge bg-success-subtle text-success-emphasis"><i class="bi bi-lock-fill"></i> Fechado</span>{% else %}<span class="badge bg-warning-subtle text-warning-emphasis">Aberto</span>{% endif %}
+      </div>
+      <ul class="list-group list-group-flush">
+        <li class="list-group-item d-flex justify-content-between">
+          <span>Contas pendentes no mês</span>
+          {% if pendentes_mes == 0 %}<span class="text-success fw-semibold"><i class="bi bi-check-circle-fill"></i> Tudo quitado</span>{% else %}<a href="{% url 'lancamentos' %}?mes={{ nav.atual }}&situacao=pendente" class="text-danger fw-semibold">{{ pendentes_mes }} pendente(s)</a>{% endif %}
+        </li>
+        <li class="list-group-item d-flex justify-content-between">
+          <span>Faturas de cartão do mês</span>
+          {% if faturas_abertas == 0 %}<span class="text-success fw-semibold"><i class="bi bi-check-circle-fill"></i> Sem pendências</span>{% else %}<a href="{% url 'cartoes' %}" class="text-warning-emphasis fw-semibold">{{ faturas_abertas }} em aberto</a>{% endif %}
+        </li>
+        <li class="list-group-item d-flex justify-content-between">
+          <span>Movimentos em conta ainda não conciliados</span>
+          {% if nao_conciliados == 0 %}<span class="text-success fw-semibold"><i class="bi bi-check-circle-fill"></i> 100% conciliado</span>{% else %}<a href="{% url 'lancamentos' %}?mes={{ nav.atual }}&conciliado=nao" class="text-warning-emphasis fw-semibold">{{ nao_conciliados }} item(ns)</a>{% endif %}
+        </li>
+      </ul>
+    </div>
+
+    <div class="card"><div class="card-body">
+      {% if fechamento and fechamento.fechado %}
+        <p class="small text-body-secondary">Fechado em {{ fechamento.fechado_em|date:"d/m/Y H:i" }}{% if fechamento.fechado_por %} por <strong>{{ fechamento.fechado_por.username }}</strong>{% endif %}. Edições neste mês estão bloqueadas.</p>
+        {% if fechamento.observacao %}<p class="small border-start ps-2">{{ fechamento.observacao }}</p>{% endif %}
+        <form method="post">{% csrf_token %}<input type="hidden" name="acao" value="reabrir"><button class="btn btn-outline-warning"><i class="bi bi-unlock"></i> Reabrir mês para edições</button></form>
+      {% else %}
+        <form method="post">{% csrf_token %}<input type="hidden" name="acao" value="fechar">
+          {% for campo in form %}{% include "financeiro/_campo.html" %}{% endfor %}
+          <button class="btn btn-primary"><i class="bi bi-lock"></i> Fechar mês {{ nav.mes|date:"m/Y" }}</button>
+        </form>
+      {% endif %}
+    </div></div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header">Meses fechados recentemente</div>
+      <ul class="list-group list-group-flush small">
+        {% for f in historico %}
+        <li class="list-group-item d-flex justify-content-between">
+          <a href="?mes={{ f.mes|date:'Y-m' }}">{{ f.mes|date:"m/Y" }}</a>
+          <span>{% if f.fechado %}<span class="badge bg-success-subtle text-success-emphasis">fechado</span>{% else %}<span class="badge text-bg-light border">reaberto</span>{% endif %}</span>
+        </li>
+        {% empty %}<li class="list-group-item text-body-secondary">Nenhum fechamento registrado ainda.</li>{% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}

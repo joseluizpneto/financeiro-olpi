@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block titulo %}Painel Admin da Aplicação{% endblock %}
+{% block conteudo %}
+<div class="page-head">
+  <h1>Painel Admin da Aplicação</h1>
+  {% if user.is_staff %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'admin:index' %}"><i class="bi bi-shield-lock"></i> Django Admin técnico</a>{% endif %}
+</div>
+{% include "financeiro/_admin_nav.html" %}
+
+<div class="row g-3 mb-3">
+  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="kpi-label">Usuários ativos</div><div class="kpi">{{ usuarios_ativos }} / {{ total_usuarios }}</div><div class="small text-body-secondary"><a href="{% url 'admin_usuarios' %}">gerenciar acessos</a></div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="kpi-label">Sessões ativas</div><div class="kpi">{{ sessoes_ativas }}</div><div class="small text-body-secondary">{% if bloqueios_login %}<span class="text-danger">{{ bloqueios_login }} bloqueio(s)</span>{% else %}<a href="{% url 'admin_sessoes' %}">ver sessões</a>{% endif %}</div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="kpi-label">Integrações</div><div class="small mt-1">
+    Telegram: {% if telegram and telegram.ativo %}<span class="badge bg-success-subtle text-success-emphasis">ativo</span>{% else %}<span class="badge text-bg-light border">inativo</span>{% endif %}<br>
+    IA: {% if ia and ia.ativo %}<span class="badge bg-success-subtle text-success-emphasis">ativo</span>{% else %}<span class="badge text-bg-light border">inativo</span>{% endif %}
+  </div></div></div></div>
+  <div class="col-6 col-lg-3"><div class="card h-100"><div class="card-body"><div class="kpi-label">Tokens de API</div><div class="kpi">{{ tokens_ativos }}</div><div class="small text-body-secondary"><a href="{% url 'admin_tokens' %}">gerar / revogar</a></div></div></div></div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Atividade recente (Auditoria)</span>
+        <a class="small" href="{% url 'admin_auditoria' %}">ver histórico completo</a>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>Quando</th><th>Usuário</th><th>Ação</th><th>Resumo</th></tr></thead>
+          <tbody>
+          {% for log in ultimos_logs %}
+            <tr>
+              <td class="tabular small text-body-secondary">{{ log.criado_em|date:"d/m H:i" }}</td>
+              <td class="small fw-medium">{{ log.usuario.username|default:"Sistema" }}</td>
+              <td><span class="badge text-bg-light border">{{ log.get_acao_display }}</span></td>
+              <td class="small">{{ log.resumo }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4" class="text-center text-body-secondary py-3">Nenhuma atividade registrada ainda.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header">Ações de manutenção</div>
+      <div class="card-body d-flex flex-column gap-2">
+        <form method="post" action="{% url 'admin_sistema_acao' %}">{% csrf_token %}<input type="hidden" name="acao" value="gerar_recorrencias"><button class="btn btn-outline-primary w-100 text-start"><i class="bi bi-arrow-repeat"></i> Gerar recorrências agora (45 dias)</button></form>
+        <form method="post" action="{% url 'admin_sistema_acao' %}">{% csrf_token %}<input type="hidden" name="acao" value="recalcular_faturas"><button class="btn btn-outline-primary w-100 text-start"><i class="bi bi-credit-card-2-back"></i> Recalcular status das faturas</button></form>
+        <form method="post" action="{% url 'admin_sistema_acao' %}">{% csrf_token %}<input type="hidden" name="acao" value="simular_alertas"><button class="btn btn-outline-secondary w-100 text-start"><i class="bi bi-bell"></i> Simular alertas do dia</button></form>
+        <form method="post" action="{% url 'admin_sistema_acao' %}">{% csrf_token %}<input type="hidden" name="acao" value="enviar_alertas"><button class="btn btn-outline-success w-100 text-start"><i class="bi bi-send"></i> Enviar alertas agora (Telegram)</button></form>
+      </div>
+    </div>
+
+    {% if user.is_staff or user.is_superuser %}
+    <div class="card mt-3">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-git"></i> Atualizações do sistema</span>
+        {% if atualizacao_resumo and atualizacao_resumo.ok and atualizacao_resumo.tem_atualizacao %}
+        <span class="badge bg-warning-subtle text-warning-emphasis">disponível</span>
+        {% elif atualizacao_resumo and atualizacao_resumo.ok and atualizacao_resumo.estado == 'atualizado' %}
+        <span class="badge bg-success-subtle text-success-emphasis">atualizado</span>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        <div class="small text-body-secondary mb-2">
+          Branch: <code>{{ versao_git.branch|default:"main" }}</code>
+          {% if versao_git.commit_curto %} · Commit: <code>{{ versao_git.commit_curto }}</code>{% endif %}
+        </div>
+        {% if atualizacao_resumo and atualizacao_resumo.ok and atualizacao_resumo.tem_atualizacao %}
+        <div class="small mb-2">{{ atualizacao_resumo.mensagem_status }}</div>
+        {% endif %}
+        <a class="btn btn-outline-primary btn-sm w-100" href="{% url 'admin_atualizacoes' %}"><i class="bi bi-cloud-arrow-down"></i> Verificar / atualizar</a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

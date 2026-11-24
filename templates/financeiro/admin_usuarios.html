@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block titulo %}Usuários · Painel Admin{% endblock %}
+{% block conteudo %}
+<div class="page-head">
+  <h1>Gerenciamento de usuários</h1>
+  <a class="btn btn-primary" href="{% url 'admin_usuario_criar' %}"><i class="bi bi-person-plus"></i> Novo usuário</a>
+</div>
+{% include "financeiro/_admin_nav.html" %}
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr><th>Usuário</th><th>Nome</th><th>Titular vinculado</th><th>Telegram Chat ID</th><th class="text-end">Lançamentos</th><th>Status</th><th>Último acesso</th><th></th></tr></thead>
+      <tbody>
+      {% for u in usuarios %}
+        <tr class="{% if not u.is_active %}text-body-secondary{% endif %}">
+          <td><a class="fw-medium text-reset" href="{% url 'admin_usuario_editar' u.pk %}">{{ u.username }}</a>{% if u.is_superuser %} <span class="badge bg-primary-subtle text-primary-emphasis">admin</span>{% endif %}</td>
+          <td>{{ u.get_full_name|default:"—" }}</td>
+          <td>{% if u.titular %}{{ u.titular.nome }}{% else %}—{% endif %}</td>
+          <td class="small tabular">{% if u.titular and u.titular.telegram_chat_id %}{{ u.titular.telegram_chat_id }}{% else %}—{% endif %}</td>
+          <td class="text-end tabular">{{ u.qtd_lancamentos }}</td>
+          <td>{% if u.is_active %}<span class="badge bg-success-subtle text-success-emphasis">ativo</span>{% else %}<span class="badge bg-danger-subtle text-danger-emphasis">inativo</span>{% endif %}</td>
+          <td class="small tabular text-body-secondary">{{ u.last_login|date:"d/m/Y H:i"|default:"Nunca" }}</td>
+          <td class="text-end text-nowrap">
+            <a class="btn btn-sm btn-outline-secondary" href="{% url 'admin_usuario_senha' u.pk %}" title="Redefinir senha"><i class="bi bi-key"></i></a>
+            <a class="btn btn-sm btn-outline-primary" href="{% url 'admin_usuario_editar' u.pk %}" title="Editar"><i class="bi bi-pencil"></i></a>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,100 @@
+{% extends "base.html" %}{% load fin static %}
+{% block titulo %}Fluxo de caixa projetado{% endblock %}
+{% block conteudo %}
+<div class="page-head">
+  <div class="d-flex flex-wrap align-items-center gap-2">
+    <h1>Fluxo de caixa projetado</h1>
+    <div class="btn-group btn-group-sm">
+      <a class="btn {% if dias == 30 %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="?dias=30&escopo={{ escopo }}{% if conta_id %}&conta={{ conta_id }}{% endif %}">30 dias</a>
+      <a class="btn {% if dias == 60 %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="?dias=60&escopo={{ escopo }}{% if conta_id %}&conta={{ conta_id }}{% endif %}">60 dias</a>
+      <a class="btn {% if dias == 90 %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="?dias=90&escopo={{ escopo }}{% if conta_id %}&conta={{ conta_id }}{% endif %}">90 dias</a>
+    </div>
+  </div>
+  <form method="get" class="d-flex flex-wrap gap-2">
+    <input type="hidden" name="dias" value="{{ dias }}">
+    {% if tem_empresa %}
+    <select class="form-select form-select-sm" name="escopo" onchange="this.form.submit()">
+      <option value="todos" {% if escopo == 'todos' %}selected{% endif %}>Consolidado</option>
+      <option value="pessoal" {% if escopo == 'pessoal' %}selected{% endif %}>Pessoal (PF)</option>
+      <option value="empresa" {% if escopo == 'empresa' %}selected{% endif %}>Empresa (PJ)</option>
+    </select>
+    {% endif %}
+    <select class="form-select form-select-sm" name="conta" onchange="this.form.submit()">
+      <option value="">Todas as contas</option>
+      {% for c in contas %}<option value="{{ c.pk }}" {% if conta_id == c.pk %}selected{% endif %}>{{ c }}</option>{% endfor %}
+    </select>
+  </form>
+</div>
+
+{% if dados.fica_negativo %}
+<div class="alert alert-danger py-2">
+  <i class="bi bi-exclamation-octagon-fill"></i> <strong>Alerta de caixa negativo:</strong> o saldo projetado chega a <strong>{{ dados.saldo_minimo|brl }}</strong> em <strong>{{ dados.data_minimo|date:"d/m/Y" }}</strong>.
+</div>
+{% endif %}
+
+<div class="row g-3 mb-3">
+  <div class="col-4"><div class="card h-100"><div class="card-body"><div class="kpi-label">Saldo hoje</div><div class="kpi {{ dados.saldo_inicial|neg }}">{{ dados.saldo_inicial|brl }}</div></div></div></div>
+  <div class="col-4"><div class="card h-100"><div class="card-body"><div class="kpi-label">Menor saldo ({{ dias }}d)</div><div class="kpi {{ dados.saldo_minimo|neg }}">{{ dados.saldo_minimo|brl }}</div><div class="small text-body-secondary">em {{ dados.data_minimo|date:"d/m/Y" }}</div></div></div></div>
+  <div class="col-4"><div class="card h-100"><div class="card-body"><div class="kpi-label">Saldo ao final ({{ dias }}d)</div><div class="kpi {{ dados.saldo_final|neg }}">{{ dados.saldo_final|brl }}</div></div></div></div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header">Evolução diária estimada (pendentes + faturas + recorrências)</div>
+  <div class="card-body"><div class="chart-box"><canvas id="graficoFluxo"></canvas></div></div>
+</div>
+
+<div class="card">
+  <div class="card-header">Eventos previstos no período ({{ dados.eventos|length }})</div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead><tr><th>Data</th><th>Descrição</th><th>Origem</th><th class="d-none d-md-table-cell">Conta</th><th class="text-end">Impacto</th></tr></thead>
+      <tbody>
+      {% for e in dados.eventos %}
+        <tr>
+          <td class="tabular">{{ e.data|date:"d/m/Y" }}{% if e.atrasado %} <span class="badge bg-danger-subtle text-danger-emphasis">atrasado</span>{% endif %}</td>
+          <td>{{ e.descricao }}</td>
+          <td class="small text-body-secondary">{{ e.origem }}</td>
+          <td class="d-none d-md-table-cell small">{{ e.conta }}</td>
+          <td class="text-end fw-semibold {% if e.valor < 0 %}text-danger{% else %}text-success{% endif %}">{{ e.valor|brl }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5" class="text-center text-body-secondary py-4">Nenhum evento previsto para este período.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{ grafico|json_script:"dados-fluxo" }}
+{% endblock %}
+{% block scripts %}
+<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script>
+<script>
+(() => {
+  const d = JSON.parse(document.getElementById('dados-fluxo').textContent);
+  const escuro = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+  Chart.defaults.color = escuro ? '#cbd5e1' : '#475569';
+  Chart.defaults.borderColor = escuro ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.06)';
+  const brl = v => v.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+  new Chart(document.getElementById('graficoFluxo'), {
+    type: 'line',
+    data: {
+      labels: d.labels,
+      datasets: [{
+        label: 'Saldo projetado',
+        data: d.saldos,
+        borderColor: '#0f766e',
+        backgroundColor: 'rgba(15,118,110,0.12)',
+        fill: true,
+        tension: 0.25,
+        pointRadius: 2
+      }]
+    },
+    options: {
+      maintainAspectRatio: false,
+      scales: { y: { ticks: { callback: v => brl(v) } } },
+      plugins: { tooltip: { callbacks: { label: c => ` Saldo: ${brl(c.parsed.y)}` } } }
+    }
+  });
+})();
+</script>
+{% endblock %}
