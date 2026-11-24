@@ -1198,3 +1198,44 @@ class FechamentoMensal(models.Model):
 
     def __str__(self) -> str:
         return f"{self.mes:%m/%Y} ({'Fechado' if self.fechado else 'Aberto'})"
+
+
+class ConfiguracaoSistema(models.Model):
+    """Configuração global única (singleton) para identidade visual do sistema."""
+
+    NOME_PADRAO = "OLPI"
+    SUBTITULO_PADRAO = "Orçamento, Lançamentos, Patrimônio e Investimentos"
+
+    nome_sistema = models.CharField(
+        "Nome do Sistema",
+        max_length=60,
+        default=NOME_PADRAO,
+    )
+    subtitulo_sistema = models.CharField(
+        "Subtítulo / Descrição",
+        max_length=150,
+        blank=True,
+        default=SUBTITULO_PADRAO,
+    )
+
+    class Meta:
+        verbose_name = "Configuração do Sistema"
+        verbose_name_plural = "Configuração do Sistema"
+
+    def __str__(self) -> str:
+        return self.nome_sistema or self.NOME_PADRAO
+
+    def save(self, *args, **kwargs) -> None:
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def carregar(cls) -> ConfiguracaoSistema:
+        obj, _ = cls.objects.get_or_create(
+            pk=1,
+            defaults={
+                "nome_sistema": cls.NOME_PADRAO,
+                "subtitulo_sistema": cls.SUBTITULO_PADRAO,
+            },
+        )
+        return obj

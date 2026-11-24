@@ -69,6 +69,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "financeiro.context_processors.contexto_global",
+                "financeiro.context_processors.configuracoes_globais",
             ],
         },
     },

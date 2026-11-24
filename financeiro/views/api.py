@@ -5,6 +5,7 @@ from datetime import timedelta
 from django.http import HttpRequest, JsonResponse
 
 from .. import services as sv
+from ..context_processors import obter_identidade_sistema
 from ..models import Conta
 from ..security import autenticar_token_api
 from ..utils import hoje, inicio_mes
@@ -53,15 +54,16 @@ def api_resumo(request: HttpRequest) -> JsonResponse:
 
 
 def manifest_pwa(request: HttpRequest) -> JsonResponse:
-    return JsonResponse(
-        {
-            "name": "Controle Financeiro",
-            "short_name": "Finanças",
-            "start_url": "/",
-            "display": "standalone",
-            "background_color": "#f8fafc",
-            "theme_color": "#0f766e",
-            "lang": "pt-BR",
-        },
-        content_type="application/manifest+json",
-    )
+    nome, subtitulo = obter_identidade_sistema()
+    manifest = {
+        "name": f"{nome} — {subtitulo}" if subtitulo else nome,
+        "short_name": nome,
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#f8fafc",
+        "theme_color": "#0f766e",
+        "lang": "pt-BR",
+    }
+    if subtitulo:
+        manifest["description"] = subtitulo
+    return JsonResponse(manifest, content_type="application/manifest+json")

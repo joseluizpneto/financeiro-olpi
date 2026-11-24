@@ -4,8 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0f766e">
+  <meta name="application-name" content="{{ nome_sistema }}">
+  <meta name="apple-mobile-web-app-title" content="{{ nome_sistema }}">
   <link rel="manifest" href="{% url 'manifest' %}">
-  <title>{% block titulo %}Painel{% endblock %} · Controle Financeiro</title>
+  <title>{% block titulo %}Painel{% endblock %} · {{ nome_sistema }}</title>
   <script>
     (() => {
       const m = matchMedia('(prefers-color-scheme: dark)');
@@ -62,7 +64,7 @@
 {% if user.is_authenticated %}
 <nav class="navbar navbar-expand-lg bg-body border-bottom sticky-top">
   <div class="container-xl">
-    <a class="navbar-brand fw-bold" href="{% url 'dashboard' %}"><i class="bi bi-wallet2 text-primary"></i> Finanças</a>
+    <a class="navbar-brand fw-bold" href="{% url 'dashboard' %}"{% if subtitulo_sistema %} title="{{ subtitulo_sistema }}"{% endif %}><i class="bi bi-wallet2 text-primary"></i> {{ nome_sistema }}</a>
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#menu" aria-label="Menu"><span class="navbar-toggler-icon"></span></button>
     <div class="collapse navbar-collapse" id="menu">
       <ul class="navbar-nav me-auto">
@@ -114,6 +116,9 @@
   {% endfor %}
   {% block conteudo %}{% endblock %}
 </main>
+<footer class="container-xl py-3 mt-4 border-top text-center text-body-secondary small">
+  <span class="fw-semibold">{{ nome_sistema }}</span>{% if subtitulo_sistema %} · {{ subtitulo_sistema }}{% endif %}
+</footer>
 {% if user.is_authenticated %}{% block fab %}
 <a href="{% url 'lancamento_novo' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-primary fab shadow d-flex align-items-center justify-content-center" title="Novo lançamento" aria-label="Novo lançamento"><i class="bi bi-plus-lg fs-4"></i></a>
 {% endblock %}{% endif %}

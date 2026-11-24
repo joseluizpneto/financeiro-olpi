@@ -2,15 +2,18 @@
 {% block titulo %}Painel{% endblock %}
 {% block conteudo %}
 <div class="page-head">
-  <div class="d-flex flex-wrap align-items-center gap-2">
-    <h1>Painel</h1>
-    {% if tem_empresa %}
-    <div class="btn-group btn-group-sm" role="group" aria-label="Escopo">
-      <a class="btn {% if escopo == 'todos' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="?mes={{ nav.atual }}&escopo=todos">Consolidado</a>
-      <a class="btn {% if escopo == 'pessoal' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="?mes={{ nav.atual }}&escopo=pessoal">Pessoal (PF)</a>
-      <a class="btn {% if escopo == 'empresa' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="?mes={{ nav.atual }}&escopo=empresa">Empresa (PJ)</a>
+  <div>
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <h1>Painel</h1>
+      {% if tem_empresa %}
+      <div class="btn-group btn-group-sm" role="group" aria-label="Escopo">
+        <a class="btn {% if escopo == 'todos' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="?mes={{ nav.atual }}&escopo=todos">Consolidado</a>
+        <a class="btn {% if escopo == 'pessoal' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="?mes={{ nav.atual }}&escopo=pessoal">Pessoal (PF)</a>
+        <a class="btn {% if escopo == 'empresa' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="?mes={{ nav.atual }}&escopo=empresa">Empresa (PJ)</a>
+      </div>
+      {% endif %}
     </div>
-    {% endif %}
+    {% if subtitulo_sistema %}<div class="small text-body-secondary mt-1">{{ nome_sistema }} · {{ subtitulo_sistema }}</div>{% endif %}
   </div>
   {% include "financeiro/_mes_nav.html" %}
 </div>
@@ -18,7 +21,7 @@
 {% if sem_cadastro %}
 <div class="alert alert-primary d-flex flex-wrap align-items-center gap-2">
   <i class="bi bi-stars fs-5"></i>
-  <div class="me-auto"><strong>Bem-vindo!</strong> Comece cadastrando suas contas bancárias e cartões com o saldo de hoje.</div>
+  <div class="me-auto"><strong>Bem-vindo ao {{ nome_sistema }}!</strong> Comece cadastrando suas contas bancárias e cartões com o saldo de hoje.</div>
   <a class="btn btn-sm btn-primary" href="{% url 'config_novo' 'contas' %}">Cadastrar conta</a>
   <a class="btn btn-sm btn-outline-primary" href="{% url 'config_novo' 'cartoes' %}">Cadastrar cartão</a>
 </div>

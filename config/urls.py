@@ -4,8 +4,8 @@ from django.urls import include, path
 
 from financeiro.security import LoginProtegidoView
 
-admin.site.site_header = "Controle Financeiro · Administração"
-admin.site.site_title = "Controle Financeiro"
+admin.site.site_header = "OLPI · Administração"
+admin.site.site_title = "OLPI"
 
 
 def health(_request):

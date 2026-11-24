@@ -1,8 +1,8 @@
-# Controle Financeiro
+# OLPI — Orçamento, Lançamentos, Patrimônio e Investimentos
 
-Sistema de controle financeiro pessoal e empresarial (PF e PJ): contas bancárias, cartões de crédito com faturas e parcelas, despesas recorrentes, contas a vencer, fluxo de caixa projetado, orçamento com vigência, metas, rateio entre titulares, importação OFX/CSV, conciliação e fechamento mensal, controle do veículo, relatório da empresa e Painel Admin da aplicação.
+**OLPI** (**Orçamento, Lançamentos, Patrimônio e Investimentos**) é um sistema de controle financeiro pessoal e empresarial (PF e PJ): contas bancárias, cartões de crédito com faturas e parcelas, despesas recorrentes, contas a vencer, fluxo de caixa projetado, orçamento com vigência, metas, rateio entre titulares, importação OFX/CSV, conciliação e fechamento mensal, controle do veículo, relatório da empresa e Painel Admin da aplicação.
 
-Feito em **Django 5.2 + PostgreSQL 16**, empacotado com **Docker Compose**. As telas são responsivas para o celular (com suporte a instalação como PWA) e funcionam sem internet externa (bibliotecas embutidas).
+Feito em **Django 5.2 + PostgreSQL 16**, empacotado com **Docker Compose**. As telas são responsivas para o celular (com suporte a instalação como PWA), permitem personalizar o nome e o subtítulo do sistema diretamente pelo Django Admin e funcionam sem internet externa (bibliotecas embutidas).
 
 ---
 

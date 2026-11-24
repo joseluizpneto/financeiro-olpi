@@ -1,11 +1,14 @@
 from django.contrib import admin
 from django.db import transaction
+from django.shortcuts import redirect
+from django.urls import reverse
 
 from .audit import registrar_auditoria
 from .models import (
-    Abastecimento, Cartao, Categoria, CentroCusto, Conta, Fatura, FechamentoMensal,
-    Integracao, Lancamento, Manutencao, MetaFinanceira, Orcamento, Recorrencia,
-    RegistroAuditoria, RegraCategorizacao, TentativaLogin, Titular, TokenAPI, Veiculo,
+    Abastecimento, Cartao, Categoria, CentroCusto, ConfiguracaoSistema, Conta, Fatura,
+    FechamentoMensal, Integracao, Lancamento, Manutencao, MetaFinanceira, Orcamento,
+    Recorrencia, RegistroAuditoria, RegraCategorizacao, TentativaLogin, Titular, TokenAPI,
+    Veiculo,
 )
 
 
@@ -188,3 +191,30 @@ class MetaFinanceiraAdmin(admin.ModelAdmin):
 class FechamentoMensalAdmin(admin.ModelAdmin):
     list_display = ["mes", "fechado", "fechado_por", "fechado_em"]
     list_select_related = ["fechado_por"]
+
+
+@admin.register(ConfiguracaoSistema)
+class ConfiguracaoSistemaAdmin(admin.ModelAdmin):
+    list_display = ["nome_sistema", "subtitulo_sistema"]
+
+    def has_add_permission(self, request):
+        if ConfiguracaoSistema.objects.exists():
+            return False
+        return super().has_add_permission(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def changelist_view(self, request, extra_context=None):
+        obj = ConfiguracaoSistema.carregar()
+        return redirect(reverse("admin:financeiro_configuracaosistema_change", args=[obj.pk]))
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        registrar_auditoria(
+            request.user,
+            RegistroAuditoria.EDITAR if change else RegistroAuditoria.CRIAR,
+            obj,
+            f"Admin Django: {obj.nome_sistema}",
+            request=request,
+        )

@@ -14,22 +14,24 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
-from django.db import IntegrityError, connection, transaction
+from django.db import IntegrityError, OperationalError, ProgrammingError, connection, transaction
 from django.forms import modelform_factory
-from django.test import TestCase, override_settings
+from django.test import RequestFactory, TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from . import services as sv
+from .context_processors import configuracoes_globais
 from .forms import (
     AbastecimentoForm, ConfigForm, DinheiroInput, LancamentoForm, PagamentoFaturaForm,
     formatar_dinheiro_brl, normalizar_dinheiro_brl,
 )
 from .importacao import analisar_arquivo_extrato, confirmar_importacao
 from .models import (
-    Abastecimento, Cartao, Categoria, CentroCusto, Conta, Fatura, FechamentoMensal,
-    Integracao, Lancamento, Manutencao, MetaFinanceira, Orcamento, Recorrencia,
-    RegistroAuditoria, RegraCategorizacao, TentativaLogin, Titular, TokenAPI, Veiculo,
+    Abastecimento, Cartao, Categoria, CentroCusto, ConfiguracaoSistema, Conta, Fatura,
+    FechamentoMensal, Integracao, Lancamento, Manutencao, MetaFinanceira, Orcamento,
+    Recorrencia, RegistroAuditoria, RegraCategorizacao, TentativaLogin, Titular, TokenAPI,
+    Veiculo,
 )
 from .notificacoes import enviar_alertas
 from .security import csv_seguro
@@ -1152,3 +1154,122 @@ class AtualizacaoGitTests(Base):
             self._escrever_host_info(alteracoes_locais=True)
             self.client.post(reverse("admin_atualizacao_aplicar"), {"confirmar": "1"})
             self.assertFalse(pedido_path.exists())
+
+
+class ConfiguracaoSistemaTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.admin = User.objects.create_superuser("admin_cfg", "admin_cfg@example.com", "SenhaForte#123")
+        self.factory = RequestFactory()
+
+    def test_singleton_carregar_e_save_mantem_registro_unico(self):
+        cfg = ConfiguracaoSistema.carregar()
+        self.assertEqual(cfg.pk, 1)
+        self.assertEqual(cfg.nome_sistema, "OLPI")
+        self.assertEqual(cfg.subtitulo_sistema, "Orçamento, Lançamentos, Patrimônio e Investimentos")
+
+        cfg2 = ConfiguracaoSistema.carregar()
+        self.assertEqual(cfg2.pk, 1)
+        self.assertEqual(ConfiguracaoSistema.objects.count(), 1)
+
+        outro = ConfiguracaoSistema(nome_sistema="Meu Sistema", subtitulo_sistema="Gestão Financeira")
+        outro.save()
+        self.assertEqual(outro.pk, 1)
+        self.assertEqual(ConfiguracaoSistema.objects.count(), 1)
+        self.assertEqual(ConfiguracaoSistema.objects.get(pk=1).nome_sistema, "Meu Sistema")
+
+    def test_django_admin_redireciona_changelist_bloqueia_add_delete_e_edita(self):
+        self.client.force_login(self.admin)
+
+        r_list = self.client.get(reverse("admin:financeiro_configuracaosistema_changelist"))
+        self.assertRedirects(
+            r_list,
+            reverse("admin:financeiro_configuracaosistema_change", args=[1]),
+            fetch_redirect_response=False,
+        )
+
+        r_add = self.client.get(reverse("admin:financeiro_configuracaosistema_add"))
+        self.assertEqual(r_add.status_code, 403)
+
+        r_del = self.client.get(reverse("admin:financeiro_configuracaosistema_delete", args=[1]))
+        self.assertEqual(r_del.status_code, 403)
+
+        r_post = self.client.post(
+            reverse("admin:financeiro_configuracaosistema_change", args=[1]),
+            {"nome_sistema": "OLPI Corp", "subtitulo_sistema": "Controle Patrimonial"},
+        )
+        self.assertEqual(r_post.status_code, 302)
+        cfg = ConfiguracaoSistema.objects.get(pk=1)
+        self.assertEqual(cfg.nome_sistema, "OLPI Corp")
+        self.assertEqual(cfg.subtitulo_sistema, "Controle Patrimonial")
+        self.assertTrue(RegistroAuditoria.objects.filter(modelo="configuracaosistema").exists())
+
+    def test_context_processor_defaults_excecoes_e_valores_salvos(self):
+        req = self.factory.get("/")
+        self.assertEqual(
+            configuracoes_globais(req),
+            {
+                "nome_sistema": "OLPI",
+                "subtitulo_sistema": "Orçamento, Lançamentos, Patrimônio e Investimentos",
+            },
+        )
+
+        for exc in (OperationalError("no such table"), ProgrammingError("relation does not exist")):
+            with patch("financeiro.context_processors.ConfiguracaoSistema.objects.order_by", side_effect=exc):
+                self.assertEqual(
+                    configuracoes_globais(req),
+                    {
+                        "nome_sistema": "OLPI",
+                        "subtitulo_sistema": "Orçamento, Lançamentos, Patrimônio e Investimentos",
+                    },
+                )
+
+        ConfiguracaoSistema.objects.create(nome_sistema="Finanças Casa", subtitulo_sistema="")
+        self.assertEqual(
+            configuracoes_globais(req),
+            {"nome_sistema": "Finanças Casa", "subtitulo_sistema": ""},
+        )
+
+    def test_templates_e_manifest_refletem_identidade_dinamica(self):
+        r_login = self.client.get(reverse("login"))
+        self.assertEqual(r_login.status_code, 200)
+        self.assertContains(r_login, "<title>Entrar · OLPI</title>", html=False)
+        self.assertContains(r_login, '<meta name="application-name" content="OLPI">', html=False)
+        self.assertContains(r_login, '<meta name="apple-mobile-web-app-title" content="OLPI">', html=False)
+        self.assertContains(r_login, "Orçamento, Lançamentos, Patrimônio e Investimentos")
+
+        self.client.force_login(self.admin)
+        r_dash = self.client.get(reverse("dashboard"))
+        self.assertEqual(r_dash.status_code, 200)
+        self.assertContains(r_dash, "<title>Painel · OLPI</title>", html=False)
+        self.assertContains(r_dash, '<i class="bi bi-wallet2 text-primary"></i> OLPI</a>', html=False)
+        self.assertContains(r_dash, "OLPI · Orçamento, Lançamentos, Patrimônio e Investimentos")
+
+        r_manifest = self.client.get(reverse("manifest"))
+        self.assertEqual(r_manifest.status_code, 200)
+        manifest = json.loads(r_manifest.content)
+        self.assertEqual(manifest["short_name"], "OLPI")
+        self.assertEqual(manifest["name"], "OLPI — Orçamento, Lançamentos, Patrimônio e Investimentos")
+
+        cfg = ConfiguracaoSistema.carregar()
+        cfg.nome_sistema = "Patrimônio Família"
+        cfg.subtitulo_sistema = "Orçamento Integrado"
+        cfg.save()
+
+        self.client.logout()
+        r_login_novo = self.client.get(reverse("login"))
+        self.assertContains(r_login_novo, "<title>Entrar · Patrimônio Família</title>", html=False)
+        self.assertContains(r_login_novo, '<meta name="application-name" content="Patrimônio Família">', html=False)
+        self.assertContains(r_login_novo, '<meta name="apple-mobile-web-app-title" content="Patrimônio Família">', html=False)
+        self.assertContains(r_login_novo, "Orçamento Integrado")
+
+        self.client.force_login(self.admin)
+        r_dash_novo = self.client.get(reverse("dashboard"))
+        self.assertContains(r_dash_novo, "<title>Painel · Patrimônio Família</title>", html=False)
+        self.assertContains(r_dash_novo, '<i class="bi bi-wallet2 text-primary"></i> Patrimônio Família</a>', html=False)
+        self.assertContains(r_dash_novo, "Patrimônio Família · Orçamento Integrado")
+
+        r_manifest_novo = self.client.get(reverse("manifest"))
+        manifest_novo = json.loads(r_manifest_novo.content)
+        self.assertEqual(manifest_novo["short_name"], "Patrimônio Família")
+        self.assertEqual(manifest_novo["name"], "Patrimônio Família — Orçamento Integrado")
