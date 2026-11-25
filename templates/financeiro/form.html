@@ -58,9 +58,10 @@
   const temTipo = !!document.querySelector('[name="tipo"]');
   function atualizar() {
     const tipo = marcado('tipo') || 'D';
-    const forma = marcado('forma') || 'conta';
+    const forma = marcado('forma') || 'pix';
     const transf = tipo === 'T';
-    const cartao = !transf && forma === 'cartao';
+    const cartao = !transf && forma === 'credito';
+    const dinheiro = !transf && forma === 'dinheiro';
     mostrar('forma', !transf);
     mostrar('conta', !cartao);
     mostrar('cartao', cartao);
@@ -72,7 +73,35 @@
     mostrar('compartilhado', !transf);
     mostrar('pago_por', !transf);
     const lblConta = document.querySelector('label[for="id_conta"]');
-    if (lblConta && temTipo) lblConta.firstChild.textContent = transf ? 'Conta de origem' : 'Conta';
+    if (lblConta) {
+      const txt = transf ? 'Conta de origem' : (dinheiro ? 'Carteira de dinheiro' : 'Conta bancária');
+      lblConta.firstChild.textContent = txt;
+    }
+    const selConta = document.getElementById('id_conta');
+    if (selConta) {
+      let disponiveis = 0;
+      for (const o of selConta.options) {
+        if (!o.value) continue;
+        const tipoConta = o.dataset.tipoConta || '';
+        const ok = transf || (dinheiro ? tipoConta === 'carteira' : tipoConta !== 'carteira');
+        o.hidden = !ok; o.disabled = !ok;
+        if (ok) disponiveis++;
+      }
+      if (selConta.selectedOptions[0] && selConta.selectedOptions[0].disabled) selConta.value = '';
+      let avisoCarteira = document.getElementById('aviso-sem-carteira');
+      if (dinheiro && disponiveis === 0) {
+        if (!avisoCarteira) {
+          avisoCarteira = document.createElement('div');
+          avisoCarteira.id = 'aviso-sem-carteira';
+          avisoCarteira.className = 'form-text text-warning-emphasis';
+          avisoCarteira.textContent = 'Nenhuma carteira cadastrada. Crie uma conta com tipo "Dinheiro / carteira" em Configurações.';
+          selConta.parentElement.appendChild(avisoCarteira);
+        }
+        avisoCarteira.classList.remove('d-none');
+      } else if (avisoCarteira) {
+        avisoCarteira.classList.add('d-none');
+      }
+    }
     const lblPago = document.querySelector('label[for="id_pago"]');
     if (lblPago) lblPago.textContent = tipo === 'R' || tipo === 'E' ? 'Já foi recebido' : (transf ? 'Já foi feita' : 'Já foi pago');
     const sel = document.getElementById('id_categoria');

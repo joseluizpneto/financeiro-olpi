@@ -3,7 +3,7 @@
 {% block conteudo %}
 <div class="page-head">
   <div>
-    <h1>Fatura {{ f.cartao.nome }} · <span class="text-capitalize">{{ f.referencia|date:"F/Y" }}</span></h1>
+    <h1>Fatura {{ f.cartao.banco }} · <span class="text-capitalize">{{ f.referencia|date:"F/Y" }}</span></h1>
     <div class="small text-body-secondary">Fecha em {{ f.fechamento|date:"d/m/Y" }} · vence em {{ f.vencimento|date:"d/m/Y" }} · <strong>{{ f.situacao }}</strong></div>
   </div>
   <div class="btn-group">
@@ -70,7 +70,7 @@
       <ul class="list-group list-group-flush">
         {% for p in pagamentos %}
         <li class="list-group-item d-flex justify-content-between align-items-center gap-2">
-          <span class="small">{{ p.data_pagamento|date:"d/m/Y" }} · {{ p.conta.nome }}</span>
+          <span class="small">{{ p.data_pagamento|date:"d/m/Y" }} · {{ p.conta.banco }}</span>
           <span class="d-flex align-items-center gap-2"><span class="valor">{{ p.valor|brl }}</span>
             <form method="post" action="{% url 'lancamento_excluir' p.pk %}" onsubmit="return confirm('Desfazer este pagamento?')">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="btn btn-sm btn-link text-danger p-0" title="Desfazer"><i class="bi bi-x-circle"></i></button></form>
           </span>

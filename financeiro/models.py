@@ -67,12 +67,17 @@ class Titular(models.Model):
 class CentroCusto(models.Model):
     """Para onde vai o dinheiro: Casa, Veículo, Empresa..."""
 
+    PESSOAL, EMPRESARIAL = "PF", "PJ"
+    ESCOPOS = [(PESSOAL, "Pessoal"), (EMPRESARIAL, "Empresarial")]
+
     nome = models.CharField("nome", max_length=60, unique=True)
     descricao = models.CharField("descrição", max_length=200, blank=True)
-    empresa = models.BooleanField(
-        "é empresa",
-        default=False,
-        help_text="Marque para que este centro apareça no relatório da empresa.",
+    escopo = models.CharField(
+        "escopo",
+        max_length=2,
+        choices=ESCOPOS,
+        default=PESSOAL,
+        help_text="Centros empresariais aparecem no relatório da empresa e no filtro Empresa (PJ).",
     )
     codigo_sistema = models.SlugField(
         "código interno", max_length=40, null=True, blank=True, unique=True, editable=False
@@ -157,8 +162,7 @@ class Conta(models.Model):
         ("outro", "Outro"),
     ]
 
-    nome = models.CharField("nome", max_length=80)
-    banco = models.CharField("banco", max_length=80, blank=True)
+    banco = models.CharField("banco", max_length=80)
     tipo = models.CharField("tipo", max_length=20, choices=TIPOS, default="corrente")
     titular = models.ForeignKey(Titular, verbose_name="titular", on_delete=models.PROTECT, related_name="contas")
     saldo_inicial = models.DecimalField(
@@ -187,17 +191,16 @@ class Conta(models.Model):
     ativo = models.BooleanField("ativa", default=True)
 
     class Meta:
-        ordering = ["titular__nome", "nome"]
+        ordering = ["titular__nome", "banco"]
         verbose_name = "conta bancária"
         verbose_name_plural = "contas bancárias"
 
     def __str__(self) -> str:
-        return f"{self.nome} · {self.titular.nome}"
+        return f"{self.banco} · {self.titular.nome}"
 
 
 class Cartao(models.Model):
-    nome = models.CharField("nome", max_length=80)
-    banco = models.CharField("banco", max_length=80, blank=True)
+    banco = models.CharField("banco", max_length=80)
     titular = models.ForeignKey(Titular, verbose_name="titular", on_delete=models.PROTECT, related_name="cartoes")
     limite = models.DecimalField("limite", **DINHEIRO, null=True, blank=True, validators=POSITIVO)
     dia_fechamento = models.PositiveSmallIntegerField(
@@ -225,7 +228,7 @@ class Cartao(models.Model):
     ativo = models.BooleanField("ativo", default=True)
 
     class Meta:
-        ordering = ["nome"]
+        ordering = ["banco"]
         verbose_name = "cartão de crédito"
         verbose_name_plural = "cartões de crédito"
         constraints = [
@@ -244,7 +247,7 @@ class Cartao(models.Model):
         ]
 
     def __str__(self) -> str:
-        return self.nome
+        return f"{self.banco} · {self.titular.nome}"
 
     # --- regras de fatura -------------------------------------------------
     def _mes_fechamento_de(self, referencia: date) -> date:
@@ -363,7 +366,7 @@ class Fatura(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.cartao.nome} · {self.referencia:%m/%Y}"
+        return f"{self.cartao.banco} · {self.referencia:%m/%Y}"
 
     @cached_property
     def total(self) -> Decimal:
@@ -496,6 +499,13 @@ class Recorrencia(models.Model):
     inicio = models.DateField("início", default=timezone.localdate)
     fim = models.DateField("fim", null=True, blank=True, help_text="Deixe vazio se não tem data para acabar.")
     ultima_gerada = models.DateField("última gerada", null=True, blank=True, editable=False)
+    forma_pagamento = models.CharField(
+        "forma de pagamento",
+        max_length=12,
+        choices=[("pix", "PIX"), ("debito", "Débito"), ("credito", "Crédito"), ("dinheiro", "Dinheiro")],
+        blank=True,
+        default="",
+    )
     ativo = models.BooleanField("ativa", default=True)
     criado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+", editable=False
@@ -580,6 +590,7 @@ class Recorrencia(models.Model):
                 centro=self.centro,
                 conta=self.conta,
                 cartao=self.cartao,
+                forma_pagamento=self.forma_pagamento,
                 veiculo=self.veiculo,
                 recorrencia=self,
                 pago=bool(self.cartao_id),
@@ -605,11 +616,21 @@ class Lancamento(models.Model):
         (PAGAMENTO_FATURA, "Pagamento de fatura"),
         (ESTORNO, "Estorno / reembolso"),
     ]
+    FORMA_PIX, FORMA_DEBITO, FORMA_CREDITO, FORMA_DINHEIRO = "pix", "debito", "credito", "dinheiro"
+    FORMAS_PAGAMENTO = [
+        (FORMA_PIX, "PIX"),
+        (FORMA_DEBITO, "Débito"),
+        (FORMA_CREDITO, "Crédito"),
+        (FORMA_DINHEIRO, "Dinheiro"),
+    ]
     NAO_FINANCEIROS_UPDATE = frozenset(
         {"conciliado", "conciliado_em", "comprovante", "observacao", "atualizado_por", "atualizado_em"}
     )
 
     tipo = models.CharField("tipo", max_length=1, choices=TIPOS, default=DESPESA)
+    forma_pagamento = models.CharField(
+        "forma de pagamento", max_length=12, choices=FORMAS_PAGAMENTO, blank=True, default=""
+    )
     descricao = models.CharField("descrição", max_length=200)
     valor = models.DecimalField("valor", **DINHEIRO, validators=POSITIVO)
     data = models.DateField(
@@ -617,7 +638,12 @@ class Lancamento(models.Model):
         default=timezone.localdate,
         help_text="Data da compra ou competência. No cartão, define em qual fatura entra.",
     )
-    vencimento = models.DateField("vencimento", null=True, blank=True, help_text="Para contas a pagar ou a receber.")
+    vencimento = models.DateField(
+        "vencimento",
+        null=True,
+        blank=True,
+        help_text="Para contas a pagar ou a receber. Enquanto não for paga, aparece nesta data na lista de lançamentos.",
+    )
     pago = models.BooleanField("já foi pago", default=True)
     data_pagamento = models.DateField("data do pagamento", null=True, blank=True)
 
@@ -798,9 +824,17 @@ class Lancamento(models.Model):
             if not (manter_fatura and self.fatura_id):
                 self.fatura = self.cartao.fatura_para(self.data)
             self.pago = True
+            self.forma_pagamento = self.FORMA_CREDITO
         else:
             self.cartao = None
             self.fatura = None
+            if self.tipo in (self.RECEITA, self.DESPESA, self.ESTORNO) and self.conta_id:
+                if self.conta.tipo == "carteira":
+                    self.forma_pagamento = self.FORMA_DINHEIRO
+                elif self.forma_pagamento not in (self.FORMA_PIX, self.FORMA_DEBITO):
+                    self.forma_pagamento = self.FORMA_PIX
+            else:
+                self.forma_pagamento = ""
 
         if self.tipo != self.TRANSFERENCIA:
             self.conta_destino = None
@@ -840,6 +874,13 @@ class Lancamento(models.Model):
         limpos = {i for i in ids if i}
         for f in Fatura.objects.filter(pk__in=limpos):
             f.atualizar_status()
+
+    @property
+    def data_exibicao(self) -> date:
+        """Data exibida na listagem: vencimento para pendentes, data da compra/competência para pagos."""
+        if not self.pago and self.vencimento:
+            return self.vencimento
+        return self.data
 
     @property
     def situacao(self) -> str:

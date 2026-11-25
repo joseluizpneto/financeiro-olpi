@@ -15,7 +15,7 @@
         <div>
           <a class="fw-semibold fs-5 text-reset" href="{% url 'meta_editar' item.m.pk %}">{{ item.m.nome }}</a>
           <div class="small text-body-secondary">
-            {% if item.m.conta %}Vinculada à conta {{ item.m.conta.nome }}{% else %}Controle manual{% endif %}
+            {% if item.m.conta %}Vinculada à conta {{ item.m.conta.banco }}{% else %}Controle manual{% endif %}
             {% if item.m.prazo %} · prazo {{ item.m.prazo|date:"d/m/Y" }}{% endif %}
           </div>
         </div>

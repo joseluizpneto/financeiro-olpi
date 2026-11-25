@@ -12,7 +12,7 @@ from ._comum import _ano, _escopo, _nav_mes
 
 @login_required
 def empresa(request: HttpRequest) -> HttpResponse:
-    centros = list(CentroCusto.objects.filter(empresa=True, ativo=True))
+    centros = list(CentroCusto.objects.filter(escopo=CentroCusto.EMPRESARIAL, ativo=True))
     if not centros:
         return render(request, "financeiro/empresa.html", {"centro": None})
     sel = request.GET.get("centro", "")

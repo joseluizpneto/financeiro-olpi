@@ -152,7 +152,7 @@ def conta_conciliar(request: HttpRequest, pk: int) -> HttpResponse:
             request.user,
             RegistroAuditoria.CONCILIAR,
             conta,
-            f"Conciliou conta {conta.nome} até {ate:%d/%m/%Y} ({qtd} item(ns))",
+            f"Conciliou conta {conta.banco} até {ate:%d/%m/%Y} ({qtd} item(ns))",
             {"ate": ate.isoformat(), "qtd": qtd, "bloqueou": request.POST.get("bloquear") == "1"},
             request=request,
         )

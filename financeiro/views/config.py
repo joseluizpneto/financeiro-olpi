@@ -35,10 +35,10 @@ CONFIG = OrderedDict([
         "icone": "bank",
         "descricao": "Contas correntes, poupanças, carteira em dinheiro.",
         "campos": [
-            "nome", "banco", "tipo", "titular", "saldo_inicial", "data_saldo_inicial",
+            "banco", "tipo", "titular", "saldo_inicial", "data_saldo_inicial",
             "centro_padrao", "conciliado_ate", "bloqueado_ate", "ativo",
         ],
-        "colunas": ["nome", "banco", "titular", "tipo", "saldo_atual", "ativo"],
+        "colunas": ["banco", "titular", "tipo", "saldo_atual", "ativo"],
         "relacionados": ["titular"],
     }),
     ("cartoes", {
@@ -47,10 +47,10 @@ CONFIG = OrderedDict([
         "icone": "credit-card",
         "descricao": "Limite, dia de fechamento e de vencimento.",
         "campos": [
-            "nome", "banco", "titular", "limite", "dia_fechamento", "dia_vencimento",
+            "banco", "titular", "limite", "dia_fechamento", "dia_vencimento",
             "conta_pagamento", "centro_padrao", "ativo",
         ],
-        "colunas": ["nome", "titular", "limite", "dia_fechamento", "dia_vencimento", "ativo"],
+        "colunas": ["banco", "titular", "limite", "dia_fechamento", "dia_vencimento", "ativo"],
         "relacionados": ["titular"],
     }),
     ("categorias", {
@@ -66,8 +66,8 @@ CONFIG = OrderedDict([
         "titulo": "Centros de custo",
         "icone": "diagram-3",
         "descricao": "Separa Casa, Veículo e empresas (opcional) nos relatórios.",
-        "campos": ["nome", "descricao", "empresa", "ativo"],
-        "colunas": ["nome", "descricao", "empresa", "ativo"],
+        "campos": ["nome", "descricao", "escopo", "ativo"],
+        "colunas": ["nome", "descricao", "escopo", "ativo"],
     }),
     ("veiculos", {
         "modelo": Veiculo,

@@ -20,7 +20,8 @@ class TitularAdmin(admin.ModelAdmin):
 
 @admin.register(CentroCusto)
 class CentroCustoAdmin(admin.ModelAdmin):
-    list_display = ["nome", "empresa", "codigo_sistema", "ativo"]
+    list_display = ["nome", "escopo", "codigo_sistema", "ativo"]
+    list_filter = ["escopo", "ativo"]
 
 
 @admin.register(Categoria)
@@ -33,14 +34,14 @@ class CategoriaAdmin(admin.ModelAdmin):
 
 @admin.register(Conta)
 class ContaAdmin(admin.ModelAdmin):
-    list_display = ["nome", "banco", "titular", "tipo", "saldo_inicial", "data_saldo_inicial", "ativo"]
+    list_display = ["banco", "titular", "tipo", "saldo_inicial", "data_saldo_inicial", "ativo"]
     list_filter = ["titular", "ativo"]
     list_select_related = ["titular", "centro_padrao"]
 
 
 @admin.register(Cartao)
 class CartaoAdmin(admin.ModelAdmin):
-    list_display = ["nome", "titular", "limite", "dia_fechamento", "dia_vencimento", "ativo"]
+    list_display = ["banco", "titular", "limite", "dia_fechamento", "dia_vencimento", "ativo"]
     list_select_related = ["titular", "conta_pagamento", "centro_padrao"]
 
 
@@ -56,7 +57,7 @@ class LancamentoAdmin(admin.ModelAdmin):
     list_display = [
         "data", "tipo", "descricao", "valor", "pago", "conciliado", "conta", "cartao", "categoria", "centro"
     ]
-    list_filter = ["tipo", "pago", "conciliado", "conta", "cartao", "centro"]
+    list_filter = ["tipo", "forma_pagamento", "pago", "conciliado", "conta", "cartao", "centro"]
     list_select_related = ["conta", "conta_destino", "cartao", "categoria__pai", "centro"]
     search_fields = ["descricao", "observacao"]
     date_hierarchy = "data"

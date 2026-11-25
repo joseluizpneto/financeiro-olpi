@@ -27,7 +27,7 @@ def api_resumo(request: HttpRequest) -> JsonResponse:
         "data": h.isoformat(),
         "saldo_total": str(sum((c.saldo_atual for c in contas), sv.ZERO)),
         "contas": [
-            {"id": c.pk, "nome": c.nome, "titular": c.titular.nome, "saldo": str(c.saldo_atual)}
+            {"id": c.pk, "banco": c.banco, "titular": c.titular.nome, "saldo": str(c.saldo_atual)}
             for c in contas
         ],
         "mes": {
@@ -42,7 +42,7 @@ def api_resumo(request: HttpRequest) -> JsonResponse:
                 for l in pendentes
             ],
             "faturas": [
-                {"cartao": f.cartao.nome, "saldo": str(f.saldo), "vencimento": f.vencimento.isoformat()}
+                {"cartao": f.cartao.banco, "saldo": str(f.saldo), "vencimento": f.vencimento.isoformat()}
                 for f in faturas
             ],
         },

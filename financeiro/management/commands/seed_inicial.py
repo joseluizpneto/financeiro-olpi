@@ -52,10 +52,10 @@ def _obter_titulares_iniciais() -> list[tuple[str, str]]:
     return titulares
 
 
-def _obter_centros_iniciais() -> list[tuple[str, str, bool, str]]:
+def _obter_centros_iniciais() -> list[tuple[str, str, str, str]]:
     centros = [
-        ("Casa", "Despesas e receitas residenciais e pessoais", False, "casa"),
-        ("Veículo", "Combustível, manutenção e custos do carro", False, "veiculo"),
+        ("Casa", "Despesas e receitas residenciais e pessoais", CentroCusto.PESSOAL, "casa"),
+        ("Veículo", "Combustível, manutenção e custos do carro", CentroCusto.PESSOAL, "veiculo"),
     ]
     empresa_nome = _nome_empresa_seed()
     if empresa_nome:
@@ -63,7 +63,7 @@ def _obter_centros_iniciais() -> list[tuple[str, str, bool, str]]:
             os.environ.get("SEED_EMPRESA_DESCRICAO", "").strip()[:200]
             or "Receitas e despesas da empresa"
         )
-        centros.append((empresa_nome, empresa_desc, True, "empresa"))
+        centros.append((empresa_nome, empresa_desc, CentroCusto.EMPRESARIAL, "empresa"))
     return centros
 
 DESPESAS = {
@@ -110,8 +110,8 @@ class Command(BaseCommand):
             self.stdout.write("Titulares criados.")
         centros = _obter_centros_iniciais()
         if not CentroCusto.objects.exists():
-            for nome, descricao, empresa, codigo in centros:
-                CentroCusto.objects.create(nome=nome, descricao=descricao, empresa=empresa, codigo_sistema=codigo)
+            for nome, descricao, escopo, codigo in centros:
+                CentroCusto.objects.create(nome=nome, descricao=descricao, escopo=escopo, codigo_sistema=codigo)
             self.stdout.write("Centros de custo criados.")
         else:
             for nome, _, _, codigo in centros:

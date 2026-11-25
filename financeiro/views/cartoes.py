@@ -87,7 +87,7 @@ def fatura(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def fatura_mes(request: HttpRequest, cartao_pk: int, ref: str) -> HttpResponse:
-    cartao = get_object_or_404(Cartao.objects.select_related("conta_pagamento"), pk=cartao_pk)
+    cartao = get_object_or_404(Cartao.objects.select_related("titular", "conta_pagamento"), pk=cartao_pk)
     referencia = parse_mes(ref)
     f = Fatura.objects.com_totais().filter(cartao=cartao, referencia=referencia).first()
     if f is None:

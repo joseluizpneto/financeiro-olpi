@@ -1,11 +1,11 @@
 {% extends "base.html" %}{% load fin %}
-{% block titulo %}Extrato · {{ conta.nome }}{% endblock %}
+{% block titulo %}Extrato · {{ conta.banco }}{% endblock %}
 {% block conteudo %}
 <div class="page-head">
   <div>
-    <h1>{{ conta.nome }}</h1>
+    <h1>{{ conta.banco }}</h1>
     <div class="small text-body-secondary">
-      {{ conta.titular }}{% if conta.banco %} · {{ conta.banco }}{% endif %} · saldo hoje <strong class="{{ saldo_atual|neg }}">{{ saldo_atual|brl }}</strong>
+      {{ conta.titular }} · {{ conta.get_tipo_display }} · saldo hoje <strong class="{{ saldo_atual|neg }}">{{ saldo_atual|brl }}</strong>
       {% if conta.conciliado_ate %} · conciliado até {{ conta.conciliado_ate|date:"d/m/Y" }}{% endif %}
       {% if conta.bloqueado_ate %} · <span class="text-warning-emphasis">bloqueado até {{ conta.bloqueado_ate|date:"d/m/Y" }}</span>{% endif %}
     </div>
@@ -53,7 +53,7 @@
             <td>
               <a class="text-reset" href="{% if x.l.tipo == 'F' %}{% url 'fatura' x.l.fatura_paga_id %}{% else %}{% url 'lancamento_editar' x.l.pk %}?next={{ request.get_full_path|urlencode }}{% endif %}">{{ x.l.descricao }}</a>
               {% if x.l.conciliado %} <i class="bi bi-check2-all text-primary" title="Conciliado"></i>{% endif %}
-              <div class="small text-body-secondary">{% if x.l.tipo == "T" %}{% if x.valor > 0 %}de {{ x.l.conta.nome }}{% else %}para {{ x.l.conta_destino.nome }}{% endif %}{% else %}{{ x.l.categoria|default:x.l.get_tipo_display }}{% endif %}</div>
+              <div class="small text-body-secondary">{% if x.l.tipo == "T" %}{% if x.valor > 0 %}de {{ x.l.conta.banco }}{% else %}para {{ x.l.conta_destino.banco }}{% endif %}{% else %}{{ x.l.categoria|default:x.l.get_tipo_display }}{% endif %}</div>
             </td>
             <td class="text-end {% if x.valor < 0 %}text-danger{% else %}text-success{% endif %}">{{ x.valor|brl }}</td>
             <td class="text-end {{ x.saldo|neg }}">{{ x.saldo|brl }}</td>

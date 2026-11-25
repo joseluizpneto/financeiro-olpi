@@ -53,3 +53,14 @@ def parse_mes(valor: str | None, padrao: date | None = None) -> date:
 
 def mes_str(d: date) -> str:
     return d.strftime("%Y-%m")
+
+
+def parse_data(valor: str | None) -> date | None:
+    """Converte 'AAAA-MM-DD' em `date`; retorna None se vazio ou inválido."""
+    if not valor:
+        return None
+    try:
+        d = date.fromisoformat(valor.strip())
+    except (ValueError, TypeError, AttributeError):
+        return None
+    return d if ano_valido(d.year) else None

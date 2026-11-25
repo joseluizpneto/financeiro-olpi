@@ -50,18 +50,18 @@ class Base(TestCase):
         self.titular2 = pfs[1]
         self.empresa_tit = Titular.objects.get(tipo="PJ")
         self.casa = CentroCusto.objects.get(codigo_sistema="casa")
-        self.empresa = CentroCusto.objects.get(empresa=True)
+        self.empresa = CentroCusto.objects.get(escopo=CentroCusto.EMPRESARIAL)
         self.conta = Conta.objects.create(
-            nome="Nubank", titular=self.titular1, saldo_inicial=D("1000"), data_saldo_inicial=date(2026, 1, 1)
+            banco="Nubank", titular=self.titular1, saldo_inicial=D("1000"), data_saldo_inicial=date(2026, 1, 1)
         )
         self.conta2 = Conta.objects.create(
-            nome="Inter", titular=self.titular1, data_saldo_inicial=date(2026, 1, 1)
+            banco="Inter", titular=self.titular1, data_saldo_inicial=date(2026, 1, 1)
         )
         self.conta_pj = Conta.objects.create(
-            nome="PJ", titular=self.empresa_tit, centro_padrao=self.empresa, data_saldo_inicial=date(2026, 1, 1)
+            banco="PJ", titular=self.empresa_tit, centro_padrao=self.empresa, data_saldo_inicial=date(2026, 1, 1)
         )
         self.cartao = Cartao.objects.create(
-            nome="Visa",
+            banco="Visa",
             titular=self.titular1,
             dia_fechamento=5,
             dia_vencimento=12,
@@ -84,14 +84,14 @@ class FaturaTests(Base):
         self.assertEqual((f.fechamento, f.vencimento), (date(2026, 11, 5), date(2026, 11, 12)))
 
     def test_vencimento_no_mes_seguinte_ao_fechamento(self):
-        c = Cartao.objects.create(nome="Master", titular=self.titular1, dia_fechamento=25, dia_vencimento=5)
+        c = Cartao.objects.create(banco="Master", titular=self.titular1, dia_fechamento=25, dia_vencimento=5)
         f = c.fatura_para(date(2026, 10, 10))
         self.assertEqual((f.fechamento, f.vencimento), (date(2026, 10, 25), date(2026, 11, 5)))
         f2 = c.fatura_para(date(2026, 10, 26))
         self.assertEqual((f2.fechamento, f2.vencimento), (date(2026, 11, 25), date(2026, 12, 5)))
 
     def test_dia_31_em_fevereiro(self):
-        c = Cartao.objects.create(nome="X", titular=self.titular1, dia_fechamento=31, dia_vencimento=10)
+        c = Cartao.objects.create(banco="X", titular=self.titular1, dia_fechamento=31, dia_vencimento=10)
         f = c.fatura_para(date(2027, 2, 15))
         self.assertEqual(f.fechamento, date(2027, 2, 28))
 
@@ -104,14 +104,14 @@ class FaturaTests(Base):
         self.assertEqual(self.cartao.limite_utilizado(), D("1000.00"))
 
     def test_parcelado_mes_curto_nao_pula_nem_duplica_fatura(self):
-        c = Cartao.objects.create(nome="Curto29", titular=self.titular1, dia_fechamento=29, dia_vencimento=10)
+        c = Cartao.objects.create(banco="Curto29", titular=self.titular1, dia_fechamento=29, dia_vencimento=10)
         base = Lancamento(tipo="D", descricao="Notebook", valor=D("900.00"), data=date(2027, 1, 28), cartao=c)
         itens = sv.criar_parcelado(base, 3)
         self.assertEqual(
             [i.fatura.referencia for i in itens],
             [date(2027, 2, 1), date(2027, 3, 1), date(2027, 4, 1)],
         )
-        c31 = Cartao.objects.create(nome="Curto31", titular=self.titular1, dia_fechamento=31, dia_vencimento=10)
+        c31 = Cartao.objects.create(banco="Curto31", titular=self.titular1, dia_fechamento=31, dia_vencimento=10)
         base2 = Lancamento(tipo="D", descricao="Celular", valor=D("1200.00"), data=date(2026, 3, 30), cartao=c31)
         itens2 = sv.criar_parcelado(base2, 3)
         self.assertEqual(
@@ -174,13 +174,13 @@ class SaldoTests(Base):
         Lancamento.objects.create(tipo="D", descricao="Luz", valor=D("150"), data=date(2026, 10, 1), conta=self.conta)
         Lancamento.objects.create(tipo="D", descricao="Futuro", valor=D("999"), data=date(2026, 10, 1), conta=self.conta, pago=False)
         Lancamento.objects.create(tipo="T", descricao="Reserva", valor=D("500"), data=date(2026, 10, 1), conta=self.conta, conta_destino=self.conta2)
-        saldos = {c.nome: c.saldo_atual for c in sv.saldos_contas()}
+        saldos = {c.banco: c.saldo_atual for c in sv.saldos_contas()}
         self.assertEqual(saldos["Nubank"], D("3350"))
         self.assertEqual(saldos["Inter"], D("500"))
 
     def test_data_saldo_inicial_e_futuro(self):
         c = Conta.objects.create(
-            nome="Caixa Novo", titular=self.titular1, saldo_inicial=D("500.00"), data_saldo_inicial=date(2026, 11, 10)
+            banco="Caixa Novo", titular=self.titular1, saldo_inicial=D("500.00"), data_saldo_inicial=date(2026, 11, 10)
         )
         # Antes da data inicial: deve ser ignorado no saldo
         Lancamento.objects.create(tipo="R", descricao="Antigo", valor=D("200.00"), data=date(2026, 11, 5), conta=c)
@@ -343,17 +343,17 @@ class PaginasTests(Base):
     def test_fluxo_completo(self):
         c = self.client
         # despesa à vista
-        r = c.post(reverse("lancamento_novo"), {"tipo": "D", "descricao": "Mercado", "valor": "250.50", "data": hoje().isoformat(), "forma": "conta", "conta": self.conta.pk, "categoria": self.mercado.pk, "centro": self.casa.pk, "pago": "on"})
+        r = c.post(reverse("lancamento_novo"), {"tipo": "D", "descricao": "Mercado", "valor": "250.50", "data": hoje().isoformat(), "forma": "pix", "conta": self.conta.pk, "categoria": self.mercado.pk, "centro": self.casa.pk, "pago": "on"})
         self.assertEqual(r.status_code, 302, r.content[:3000])
         # compra parcelada no cartão
-        r = c.post(reverse("lancamento_novo"), {"tipo": "D", "descricao": "Geladeira", "valor": "3000", "data": hoje().isoformat(), "forma": "cartao", "cartao": self.cartao.pk, "parcelas": "10", "categoria": self.mercado.pk})
+        r = c.post(reverse("lancamento_novo"), {"tipo": "D", "descricao": "Geladeira", "valor": "3000", "data": hoje().isoformat(), "forma": "credito", "cartao": self.cartao.pk, "parcelas": "10", "categoria": self.mercado.pk})
         self.assertEqual(r.status_code, 302)
         self.assertEqual(Lancamento.objects.filter(descricao="Geladeira").count(), 10)
         # receita da empresa: centro preenchido pela conta
-        c.post(reverse("lancamento_novo"), {"tipo": "R", "descricao": "Cliente A", "valor": "5000", "data": hoje().isoformat(), "forma": "conta", "conta": self.conta_pj.pk, "categoria": self.servicos.pk, "pago": "on"})
+        c.post(reverse("lancamento_novo"), {"tipo": "R", "descricao": "Cliente A", "valor": "5000", "data": hoje().isoformat(), "forma": "pix", "conta": self.conta_pj.pk, "categoria": self.servicos.pk, "pago": "on"})
         self.assertEqual(Lancamento.objects.get(descricao="Cliente A").centro, self.empresa)
         # imposto pendente
-        c.post(reverse("lancamento_novo"), {"tipo": "D", "descricao": "DAS", "valor": "300", "data": hoje().isoformat(), "forma": "conta", "conta": self.conta_pj.pk, "categoria": self.das.pk, "vencimento": (hoje() + timedelta(days=3)).isoformat()})
+        c.post(reverse("lancamento_novo"), {"tipo": "D", "descricao": "DAS", "valor": "300", "data": hoje().isoformat(), "forma": "pix", "conta": self.conta_pj.pk, "categoria": self.das.pk, "vencimento": (hoje() + timedelta(days=3)).isoformat()})
         das = Lancamento.objects.get(descricao="DAS")
         self.assertFalse(das.pago)
         # transferência
@@ -364,15 +364,15 @@ class PaginasTests(Base):
         r_av = c.get(reverse("a_vencer"))
         self.assertNotEqual(r_av.context["a_pagar"], D("777") + D("300"))
         # validação: despesa sem conta
-        r = c.post(reverse("lancamento_novo"), {"tipo": "D", "descricao": "X", "valor": "10", "data": hoje().isoformat(), "forma": "conta"})
+        r = c.post(reverse("lancamento_novo"), {"tipo": "D", "descricao": "X", "valor": "10", "data": hoje().isoformat(), "forma": "pix"})
         self.assertEqual(r.status_code, 200)
         self.assertContains(r, "Escolha a conta")
         # recorrência
-        r = c.post(reverse("recorrencia_nova"), {"tipo": "D", "descricao": "Internet", "valor": "120", "intervalo_meses": "1", "dia": "15", "forma": "conta", "conta": self.conta.pk, "inicio": hoje().isoformat(), "ativo": "on"})
+        r = c.post(reverse("recorrencia_nova"), {"tipo": "D", "descricao": "Internet", "valor": "120", "intervalo_meses": "1", "dia": "15", "forma": "pix", "conta": self.conta.pk, "inicio": hoje().isoformat(), "ativo": "on"})
         self.assertEqual(r.status_code, 302)
         self.assertTrue(Lancamento.objects.filter(descricao="Internet").exists())
         # abastecimento gera lançamento
-        r = c.post(reverse("abastecimento_novo", args=[self.v.pk]), {"data": hoje().isoformat(), "km": "1000", "litros": "40", "valor_total": "240", "combustivel": "gasolina", "tanque_cheio": "on", "forma": "cartao", "cartao": self.cartao.pk})
+        r = c.post(reverse("abastecimento_novo", args=[self.v.pk]), {"data": hoje().isoformat(), "km": "1000", "litros": "40", "valor_total": "240", "combustivel": "gasolina", "tanque_cheio": "on", "forma": "credito", "cartao": self.cartao.pk})
         self.assertEqual(r.status_code, 302)
         a = Abastecimento.objects.get()
         self.assertEqual(a.lancamento.veiculo, self.v)
@@ -451,7 +451,7 @@ class PaginasTests(Base):
 
         # Sem explosão N+1 em cartões e painel mesmo com múltiplos cartões e faturas
         for i in range(4):
-            card = Cartao.objects.create(nome=f"C{i}", titular=self.titular1, dia_fechamento=10, dia_vencimento=20, limite=D("3000"))
+            card = Cartao.objects.create(banco=f"C{i}", titular=self.titular1, dia_fechamento=10, dia_vencimento=20, limite=D("3000"))
             for m in range(1, 5):
                 Lancamento.objects.create(tipo="D", descricao=f"Compra {i}-{m}", valor=D("50"), data=date(2026, m, 1), cartao=card)
         sv.gerar_recorrencias(forcar=False)
@@ -466,14 +466,14 @@ class PaginasTests(Base):
         self.assertLessEqual(len(ctx_cards), 8)
 
     def test_cartoes_sem_faturas_salvas(self):
-        Cartao.objects.create(nome="Novo Card", titular=self.titular1, dia_fechamento=5, dia_vencimento=15)
+        Cartao.objects.create(banco="Novo Card", titular=self.titular1, dia_fechamento=5, dia_vencimento=15)
         r = self.client.get(reverse("cartoes"))
         self.assertEqual(r.status_code, 200)
         self.assertContains(r, "Novo Card")
 
     def test_conta_extrato_concilia_com_saldo_inicial_no_meio_do_mes(self):
         c = Conta.objects.create(
-            nome="Extrato Meio", titular=self.titular1, saldo_inicial=D("500.00"), data_saldo_inicial=date(2026, 10, 10)
+            banco="Extrato Meio", titular=self.titular1, saldo_inicial=D("500.00"), data_saldo_inicial=date(2026, 10, 10)
         )
         Lancamento.objects.create(tipo="D", descricao="Antes", valor=D("99.00"), data=date(2026, 10, 5), conta=c)
         Lancamento.objects.create(tipo="D", descricao="Depois", valor=D("100.00"), data=date(2026, 10, 15), conta=c)
@@ -534,14 +534,14 @@ class SeedInicialTests(TestCase):
         with patch.dict(os.environ, {"SEED_EMPRESA_NOME": "", "SEED_TITULARES": ""}):
             call_command("seed_inicial", verbosity=0)
         self.assertFalse(Titular.objects.filter(tipo=Titular.PJ).exists())
-        self.assertFalse(CentroCusto.objects.filter(empresa=True).exists())
+        self.assertFalse(CentroCusto.objects.filter(escopo=CentroCusto.EMPRESARIAL).exists())
         self.assertTrue(CentroCusto.objects.filter(codigo_sistema="casa").exists())
 
     def test_seed_com_empresa_cria_pj_e_centro(self):
         with patch.dict(os.environ, {"SEED_EMPRESA_NOME": "Minha Empresa", "SEED_TITULARES": ""}):
             call_command("seed_inicial", verbosity=0)
         self.assertTrue(Titular.objects.filter(nome="Minha Empresa", tipo=Titular.PJ).exists())
-        self.assertTrue(CentroCusto.objects.filter(nome="Minha Empresa", empresa=True, codigo_sistema="empresa").exists())
+        self.assertTrue(CentroCusto.objects.filter(nome="Minha Empresa", escopo=CentroCusto.EMPRESARIAL, codigo_sistema="empresa").exists())
 
 
 class SegurancaEPainelAdminTests(Base):
@@ -643,12 +643,12 @@ class SegurancaEPainelAdminTests(Base):
         # Auditoria registra criação, edição (com diff) e exclusão
         self.client.post(
             reverse("lancamento_novo"),
-            {"tipo": "D", "descricao": "Farmácia", "valor": "80.00", "data": hoje().isoformat(), "forma": "conta", "conta": self.conta.pk, "pago": "on"},
+            {"tipo": "D", "descricao": "Farmácia", "valor": "80.00", "data": hoje().isoformat(), "forma": "pix", "conta": self.conta.pk, "pago": "on"},
         )
         lanc = Lancamento.objects.get(descricao="Farmácia")
         self.client.post(
             reverse("lancamento_editar", args=[lanc.pk]),
-            {"tipo": "D", "descricao": "Farmácia Pague Menos", "valor": "95.00", "data": hoje().isoformat(), "forma": "conta", "conta": self.conta.pk, "pago": "on"},
+            {"tipo": "D", "descricao": "Farmácia Pague Menos", "valor": "95.00", "data": hoje().isoformat(), "forma": "pix", "conta": self.conta.pk, "pago": "on"},
         )
         log_edit = RegistroAuditoria.objects.filter(modelo="lancamento", acao=RegistroAuditoria.EDITAR, objeto_id=str(lanc.pk)).first()
         self.assertIsNotNone(log_edit)
@@ -689,7 +689,7 @@ class FluxosFinanceirosTests(Base):
         self.assertTrue(FechamentoMensal.objects.filter(mes=date(2026, 9, 1), fechado=True).exists())
         r = self.client.post(
             reverse("lancamento_novo"),
-            {"tipo": "D", "descricao": "Bloqueado", "valor": "50", "data": "2026-09-10", "forma": "conta", "conta": self.conta.pk, "pago": "on"},
+            {"tipo": "D", "descricao": "Bloqueado", "valor": "50", "data": "2026-09-10", "forma": "pix", "conta": self.conta.pk, "pago": "on"},
         )
         self.assertEqual(r.status_code, 200)
         self.assertContains(r, "fechado")
@@ -729,7 +729,7 @@ class FluxosFinanceirosTests(Base):
             exe = SimpleUploadedFile("virus.exe", b"MZ", content_type="application/octet-stream")
             r_bad = self.client.post(
                 reverse("lancamento_novo"),
-                {"tipo": "D", "descricao": "Comprov", "valor": "10", "data": hoje().isoformat(), "forma": "conta", "conta": self.conta.pk, "pago": "on", "comprovante": exe},
+                {"tipo": "D", "descricao": "Comprov", "valor": "10", "data": hoje().isoformat(), "forma": "pix", "conta": self.conta.pk, "pago": "on", "comprovante": exe},
             )
             self.assertEqual(r_bad.status_code, 200)
             self.assertContains(r_bad, "Formato não permitido")
@@ -737,7 +737,7 @@ class FluxosFinanceirosTests(Base):
             pdf = SimpleUploadedFile("recibo.pdf", b"%PDF-1.4\n%", content_type="application/pdf")
             r_ok = self.client.post(
                 reverse("lancamento_novo"),
-                {"tipo": "D", "descricao": "Comprov OK", "valor": "10", "data": hoje().isoformat(), "forma": "conta", "conta": self.conta.pk, "pago": "on", "comprovante": pdf},
+                {"tipo": "D", "descricao": "Comprov OK", "valor": "10", "data": hoje().isoformat(), "forma": "pix", "conta": self.conta.pk, "pago": "on", "comprovante": pdf},
             )
             self.assertEqual(r_ok.status_code, 302)
             l_pdf = Lancamento.objects.get(descricao="Comprov OK")
@@ -816,7 +816,7 @@ class MoedaInputTests(Base):
             "tipo": "D",
             "descricao": "Compra",
             "data": hoje().isoformat(),
-            "forma": "conta",
+            "forma": "pix",
             "conta": self.conta.pk,
             "categoria": self.mercado.pk,
             "pago": "on",
@@ -855,11 +855,11 @@ class MoedaInputTests(Base):
         ContaForm = modelform_factory(
             Conta,
             form=ConfigForm,
-            fields=["nome", "banco", "tipo", "titular", "saldo_inicial", "data_saldo_inicial", "ativo"],
+            fields=["banco", "tipo", "titular", "saldo_inicial", "data_saldo_inicial", "ativo"],
         )
         fc = ContaForm(
             data={
-                "nome": "Negativa",
+                "banco": "Negativa",
                 "tipo": "corrente",
                 "titular": self.titular1.pk,
                 "saldo_inicial": "-1.234,56",
@@ -874,12 +874,12 @@ class MoedaInputTests(Base):
         CartaoForm = modelform_factory(
             Cartao,
             form=ConfigForm,
-            fields=["nome", "titular", "limite", "dia_fechamento", "dia_vencimento", "ativo"],
+            fields=["banco", "titular", "limite", "dia_fechamento", "dia_vencimento", "ativo"],
         )
         for lim_in, lim_out in [("", None), ("5.000,00", D("5000.00"))]:
             fcar = CartaoForm(
                 data={
-                    "nome": "Novo",
+                    "banco": "Novo",
                     "titular": self.titular1.pk,
                     "limite": lim_in,
                     "dia_fechamento": "5",
@@ -1273,3 +1273,136 @@ class ConfiguracaoSistemaTests(Base):
         manifest_novo = json.loads(r_manifest_novo.content)
         self.assertEqual(manifest_novo["short_name"], "Patrimônio Família")
         self.assertEqual(manifest_novo["name"], "Patrimônio Família — Orçamento Integrado")
+
+
+class LancamentosDataEVencimentoTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user("tester_datas", "t@example.com", "SenhaForte#123")
+        self.client.force_login(self.user)
+
+    def test_conta_futura_nao_paga_aparece_no_vencimento_e_filtro_por_data(self):
+        pendente = Lancamento.objects.create(
+            tipo="D",
+            descricao="Aluguel futuro",
+            valor=D("1500.00"),
+            data=date(2026, 10, 5),
+            vencimento=date(2026, 11, 10),
+            pago=False,
+            conta=self.conta,
+            categoria=self.mercado,
+        )
+        pago = Lancamento.objects.create(
+            tipo="D",
+            descricao="Mercado pago",
+            valor=D("250.00"),
+            data=date(2026, 10, 12),
+            vencimento=date(2026, 11, 20),
+            pago=True,
+            conta=self.conta,
+            categoria=self.mercado,
+        )
+
+        # Pendente aparece no mês do vencimento (11/2026) e não no mês do lançamento (10/2026)
+        r_out = self.client.get(reverse("lancamentos") + "?mes=2026-10")
+        self.assertEqual(r_out.status_code, 200)
+        self.assertNotContains(r_out, "Aluguel futuro")
+        self.assertContains(r_out, "Mercado pago")
+
+        r_nov = self.client.get(reverse("lancamentos") + "?mes=2026-11")
+        self.assertEqual(r_nov.status_code, 200)
+        self.assertContains(r_nov, "Aluguel futuro")
+        self.assertNotContains(r_nov, "Mercado pago")
+        self.assertEqual(pendente.data_exibicao, date(2026, 11, 10))
+        self.assertEqual(pago.data_exibicao, date(2026, 10, 12))
+
+        # Filtro por intervalo de data
+        r_ini_fim = self.client.get(reverse("lancamentos") + "?data_ini=2026-11-01&data_fim=2026-11-15")
+        self.assertEqual(r_ini_fim.status_code, 200)
+        self.assertContains(r_ini_fim, "Aluguel futuro")
+        self.assertNotContains(r_ini_fim, "Mercado pago")
+
+        # Só data_ini e só data_fim
+        r_so_ini = self.client.get(reverse("lancamentos") + "?data_ini=2026-11-01")
+        self.assertContains(r_so_ini, "Aluguel futuro")
+        self.assertNotContains(r_so_ini, "Mercado pago")
+
+        r_so_fim = self.client.get(reverse("lancamentos") + "?data_fim=2026-10-31")
+        self.assertNotContains(r_so_fim, "Aluguel futuro")
+        self.assertContains(r_so_fim, "Mercado pago")
+
+        # Datas invertidas normalizadas e data inválida não gera 500
+        r_inv = self.client.get(reverse("lancamentos") + "?data_ini=2026-11-15&data_fim=2026-11-01")
+        self.assertEqual(r_inv.status_code, 200)
+        self.assertContains(r_inv, "Aluguel futuro")
+
+        r_bad = self.client.get(reverse("lancamentos") + "?data_ini=invalida&data_fim=9999-99-99")
+        self.assertEqual(r_bad.status_code, 200)
+
+
+class FormasPagamentoTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user("tester_formas", "f@example.com", "SenhaForte#123")
+        self.client.force_login(self.user)
+        self.carteira = Conta.objects.create(
+            banco="Carteira Casa",
+            tipo="carteira",
+            titular=self.titular1,
+            saldo_inicial=D("200.00"),
+            data_saldo_inicial=date(2026, 1, 1),
+        )
+
+    def test_formas_pix_debito_credito_dinheiro_e_validacoes(self):
+        d = hoje().isoformat()
+        # PIX e Débito descontam da conta bancária
+        r_pix = self.client.post(
+            reverse("lancamento_novo"),
+            {"tipo": "D", "descricao": "Compra PIX", "valor": "50.00", "data": d, "forma": "pix", "conta": self.conta.pk, "pago": "on"},
+        )
+        self.assertEqual(r_pix.status_code, 302)
+        self.assertEqual(Lancamento.objects.get(descricao="Compra PIX").forma_pagamento, "pix")
+
+        r_deb = self.client.post(
+            reverse("lancamento_novo"),
+            {"tipo": "D", "descricao": "Compra Débito", "valor": "30.00", "data": d, "forma": "debito", "conta": self.conta.pk, "pago": "on"},
+        )
+        self.assertEqual(r_deb.status_code, 302)
+        self.assertEqual(Lancamento.objects.get(descricao="Compra Débito").forma_pagamento, "debito")
+
+        # Crédito usa cartão
+        r_cred = self.client.post(
+            reverse("lancamento_novo"),
+            {"tipo": "D", "descricao": "Compra Crédito", "valor": "100.00", "data": d, "forma": "credito", "cartao": self.cartao.pk},
+        )
+        self.assertEqual(r_cred.status_code, 302)
+        self.assertEqual(Lancamento.objects.get(descricao="Compra Crédito").forma_pagamento, "credito")
+
+        # Dinheiro desconta da carteira
+        r_din = self.client.post(
+            reverse("lancamento_novo"),
+            {"tipo": "D", "descricao": "Padaria Dinheiro", "valor": "25.00", "data": d, "forma": "dinheiro", "conta": self.carteira.pk, "pago": "on"},
+        )
+        self.assertEqual(r_din.status_code, 302)
+        self.assertEqual(Lancamento.objects.get(descricao="Padaria Dinheiro").forma_pagamento, "dinheiro")
+        self.assertEqual(sv.saldos_contas([self.carteira])[0].saldo_atual, D("175.00"))
+
+        # Validação cruzada: dinheiro não aceita conta bancária; débito não aceita carteira
+        r_err1 = self.client.post(
+            reverse("lancamento_novo"),
+            {"tipo": "D", "descricao": "Inválido 1", "valor": "10.00", "data": d, "forma": "dinheiro", "conta": self.conta.pk, "pago": "on"},
+        )
+        self.assertEqual(r_err1.status_code, 200)
+        self.assertContains(r_err1, "Dinheiro / carteira")
+
+        r_err2 = self.client.post(
+            reverse("lancamento_novo"),
+            {"tipo": "D", "descricao": "Inválido 2", "valor": "10.00", "data": d, "forma": "debito", "conta": self.carteira.pk, "pago": "on"},
+        )
+        self.assertEqual(r_err2.status_code, 200)
+        self.assertContains(r_err2, "não uma carteira")
+
+        # Filtro por forma na tela de lançamentos
+        r_filt = self.client.get(reverse("lancamentos") + "?forma=dinheiro")
+        self.assertContains(r_filt, "Padaria Dinheiro")
+        self.assertNotContains(r_filt, "Compra Débito")

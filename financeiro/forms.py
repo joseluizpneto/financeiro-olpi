@@ -19,7 +19,18 @@ from .models import (
 from .security import validar_comprovante
 
 User = get_user_model()
-FORMAS = [("conta", "Conta bancária"), ("cartao", "Cartão de crédito")]
+FORMAS = Lancamento.FORMAS_PAGAMENTO
+FORMAS_IMPORTACAO = [("conta", "Conta bancária"), ("cartao", "Cartão de crédito")]
+
+
+def _forma_inicial(obj) -> str:
+    if getattr(obj, "forma_pagamento", ""):
+        return obj.forma_pagamento
+    if getattr(obj, "cartao_id", None):
+        return Lancamento.FORMA_CREDITO
+    if getattr(obj, "conta_id", None) and obj.conta.tipo == "carteira":
+        return Lancamento.FORMA_DINHEIRO
+    return Lancamento.FORMA_PIX
 
 
 def ativos(qs, *atuais):
@@ -41,6 +52,17 @@ class SelectComTipo(forms.Select):
         instancia = getattr(value, "instance", None)
         if instancia is not None:
             opcao["attrs"]["data-tipo"] = instancia.tipo
+        return opcao
+
+
+class SelectContaComTipo(forms.Select):
+    """Select de contas com data-tipo-conta em cada opção (o JS separa banco vs carteira)."""
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        opcao = super().create_option(name, value, label, selected, index, subindex, attrs)
+        instancia = getattr(value, "instance", None)
+        if instancia is not None:
+            opcao["attrs"]["data-tipo-conta"] = instancia.tipo
         return opcao
 
 
@@ -155,31 +177,61 @@ class EstiloMixin:
 
 
 class MeioPagamentoMixin:
-    """Campos 'pagar com: conta ou cartão' para formulários que geram lançamentos."""
+    """Campos de forma de pagamento (PIX, Débito, Crédito, Dinheiro) para formulários."""
 
-    def adicionar_pagamento(self, conta_id: int | None = None, cartao_id: int | None = None) -> None:
+    def adicionar_pagamento(
+        self,
+        conta_id: int | None = None,
+        cartao_id: int | None = None,
+        forma_pagamento: str = "",
+        conta_tipo: str = "",
+    ) -> None:
         self.fields["forma"] = forms.ChoiceField(
-            choices=FORMAS, widget=forms.RadioSelect, initial="conta", required=False, label="Pagar com"
+            choices=FORMAS, widget=forms.RadioSelect, initial=Lancamento.FORMA_PIX, required=False, label="Forma de pagamento"
         )
         self.fields["conta"] = forms.ModelChoiceField(
-            ativos(Conta.objects.select_related("titular"), conta_id), required=False, label="Conta"
+            ativos(Conta.objects.select_related("titular"), conta_id),
+            required=False,
+            label="Conta",
+            widget=SelectContaComTipo,
         )
         self.fields["cartao"] = forms.ModelChoiceField(
-            ativos(Cartao.objects.all(), cartao_id), required=False, label="Cartão"
+            ativos(Cartao.objects.select_related("titular"), cartao_id), required=False, label="Cartão"
         )
         if conta_id or cartao_id:
-            self.initial.update(forma="cartao" if cartao_id else "conta", conta=conta_id, cartao=cartao_id)
+            if forma_pagamento:
+                forma = forma_pagamento
+            elif cartao_id:
+                forma = Lancamento.FORMA_CREDITO
+            elif conta_tipo == "carteira":
+                forma = Lancamento.FORMA_DINHEIRO
+            else:
+                forma = Lancamento.FORMA_PIX
+            self.initial.update(forma=forma, conta=conta_id, cartao=cartao_id)
 
     def validar_pagamento(self, cd: dict, obrigatorio: bool = True) -> dict:
-        forma = cd.get("forma") or "conta"
-        if forma == "cartao":
+        forma = cd.get("forma") or Lancamento.FORMA_PIX
+        if forma == Lancamento.FORMA_CREDITO:
             cd["conta"] = None
             if obrigatorio and not cd.get("cartao"):
-                self.add_error("cartao", "Escolha o cartão.")
-        else:
+                self.add_error("cartao", "Escolha o cartão de crédito.")
+        elif forma == Lancamento.FORMA_DINHEIRO:
             cd["cartao"] = None
-            if obrigatorio and not cd.get("conta"):
-                self.add_error("conta", "Escolha a conta.")
+            conta = cd.get("conta")
+            if obrigatorio and not conta:
+                self.add_error("conta", "Escolha a carteira de dinheiro.")
+            elif conta and conta.tipo != "carteira":
+                self.add_error("conta", "Para pagamento em dinheiro, escolha uma conta do tipo Dinheiro / carteira.")
+        else:
+            if forma not in (Lancamento.FORMA_PIX, Lancamento.FORMA_DEBITO):
+                forma = Lancamento.FORMA_PIX
+            cd["cartao"] = None
+            conta = cd.get("conta")
+            if obrigatorio and not conta:
+                self.add_error("conta", "Escolha a conta bancária.")
+            elif conta and conta.tipo == "carteira":
+                self.add_error("conta", "Para PIX ou Débito, escolha uma conta bancária (não uma carteira em dinheiro).")
+        cd["forma"] = forma
         origem = cd.get("conta") or cd.get("cartao")
         if "centro" in self.fields and not cd.get("centro") and origem is not None and origem.centro_padrao_id:
             cd["centro"] = origem.centro_padrao
@@ -195,7 +247,7 @@ class LancamentoForm(EstiloMixin, MeioPagamentoMixin, forms.ModelForm):
     ]
 
     forma = forms.ChoiceField(
-        choices=FORMAS, widget=forms.RadioSelect, initial="conta", required=False, label="Pagar com"
+        choices=FORMAS, widget=forms.RadioSelect, initial=Lancamento.FORMA_PIX, required=False, label="Forma de pagamento"
     )
     parcelas = forms.IntegerField(
         min_value=1,
@@ -225,6 +277,7 @@ class LancamentoForm(EstiloMixin, MeioPagamentoMixin, forms.ModelForm):
         ]
         widgets = {
             "tipo": forms.RadioSelect,
+            "conta": SelectContaComTipo,
             "categoria": SelectComTipo,
             "observacao": forms.Textarea(attrs={"rows": 2}),
         }
@@ -235,7 +288,7 @@ class LancamentoForm(EstiloMixin, MeioPagamentoMixin, forms.ModelForm):
         self.fields["tipo"].choices = self.TIPOS_FORM
         self.fields["conta"].queryset = ativos(Conta.objects.select_related("titular"), i.conta_id)
         self.fields["conta_destino"].queryset = ativos(Conta.objects.select_related("titular"), i.conta_destino_id)
-        self.fields["cartao"].queryset = ativos(Cartao.objects.all(), i.cartao_id)
+        self.fields["cartao"].queryset = ativos(Cartao.objects.select_related("titular"), i.cartao_id)
         self.fields["categoria"].queryset = ativos(categorias_qs(), i.categoria_id)
         self.fields["centro"].queryset = ativos(CentroCusto.objects.all(), i.centro_id)
         self.fields["veiculo"].queryset = ativos(Veiculo.objects.all(), i.veiculo_id)
@@ -243,7 +296,7 @@ class LancamentoForm(EstiloMixin, MeioPagamentoMixin, forms.ModelForm):
         self.fields["pago_por"].empty_label = "Automático (titular do meio de pagamento)"
         if i.pk:
             del self.fields["parcelas"]
-            self.initial["forma"] = "cartao" if i.cartao_id else "conta"
+            self.initial["forma"] = _forma_inicial(i)
         if not (i.pk and i.grupo_parcelas):
             del self.fields["aplicar_futuras"]
         if not Veiculo.objects.exists():
@@ -289,10 +342,19 @@ class LancamentoForm(EstiloMixin, MeioPagamentoMixin, forms.ModelForm):
                     cd["veiculo"] = veiculos[0]
         return cd
 
+    def save(self, commit: bool = True):
+        obj = super().save(commit=False)
+        obj.forma_pagamento = (
+            "" if obj.tipo == Lancamento.TRANSFERENCIA else (self.cleaned_data.get("forma") or "")
+        )
+        if commit:
+            obj.save()
+        return obj
+
 
 class RecorrenciaForm(EstiloMixin, MeioPagamentoMixin, forms.ModelForm):
     forma = forms.ChoiceField(
-        choices=FORMAS, widget=forms.RadioSelect, initial="conta", required=False, label="Pagar com"
+        choices=FORMAS, widget=forms.RadioSelect, initial=Lancamento.FORMA_PIX, required=False, label="Forma de pagamento"
     )
 
     field_order = [
@@ -306,24 +368,31 @@ class RecorrenciaForm(EstiloMixin, MeioPagamentoMixin, forms.ModelForm):
             "tipo", "descricao", "valor", "categoria", "centro", "conta", "cartao",
             "veiculo", "intervalo_meses", "dia", "inicio", "fim", "ativo",
         ]
-        widgets = {"tipo": forms.RadioSelect, "categoria": SelectComTipo}
+        widgets = {"tipo": forms.RadioSelect, "conta": SelectContaComTipo, "categoria": SelectComTipo}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         i = self.instance
         self.fields["conta"].queryset = ativos(Conta.objects.select_related("titular"), i.conta_id)
-        self.fields["cartao"].queryset = ativos(Cartao.objects.all(), i.cartao_id)
+        self.fields["cartao"].queryset = ativos(Cartao.objects.select_related("titular"), i.cartao_id)
         self.fields["categoria"].queryset = ativos(categorias_qs(), i.categoria_id)
         self.fields["centro"].queryset = ativos(CentroCusto.objects.all(), i.centro_id)
         self.fields["veiculo"].queryset = ativos(Veiculo.objects.all(), i.veiculo_id)
         if i.pk:
-            self.initial["forma"] = "cartao" if i.cartao_id else "conta"
+            self.initial["forma"] = _forma_inicial(i)
         if not Veiculo.objects.exists():
             del self.fields["veiculo"]
         self.estilizar()
 
     def clean(self):
         return self.validar_pagamento(super().clean(), obrigatorio=True)
+
+    def save(self, commit: bool = True):
+        obj = super().save(commit=False)
+        obj.forma_pagamento = self.cleaned_data.get("forma") or ""
+        if commit:
+            obj.save()
+        return obj
 
 
 class AbastecimentoForm(EstiloMixin, MeioPagamentoMixin, forms.ModelForm):
@@ -338,7 +407,12 @@ class AbastecimentoForm(EstiloMixin, MeioPagamentoMixin, forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         lanc = self.instance.lancamento if self.instance.pk else None
-        self.adicionar_pagamento(lanc.conta_id if lanc else None, lanc.cartao_id if lanc else None)
+        self.adicionar_pagamento(
+            lanc.conta_id if lanc else None,
+            lanc.cartao_id if lanc else None,
+            forma_pagamento=lanc.forma_pagamento if lanc else "",
+            conta_tipo=lanc.conta.tipo if (lanc and lanc.conta_id) else "",
+        )
         self.fields["litros"].widget.attrs["step"] = "0.001"
         self.order_fields(self.field_order)
         self.estilizar()
@@ -361,7 +435,12 @@ class ManutencaoForm(EstiloMixin, MeioPagamentoMixin, forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         lanc = self.instance.lancamento if self.instance.pk else None
-        self.adicionar_pagamento(lanc.conta_id if lanc else None, lanc.cartao_id if lanc else None)
+        self.adicionar_pagamento(
+            lanc.conta_id if lanc else None,
+            lanc.cartao_id if lanc else None,
+            forma_pagamento=lanc.forma_pagamento if lanc else "",
+            conta_tipo=lanc.conta.tipo if (lanc and lanc.conta_id) else "",
+        )
         self.fields["forma"].help_text = "Só é necessário quando há valor."
         self.order_fields(self.field_order)
         self.estilizar()
@@ -441,12 +520,24 @@ class ImportacaoForm(EstiloMixin, MeioPagamentoMixin, forms.Form):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.adicionar_pagamento()
+        self.fields["forma"].choices = FORMAS_IMPORTACAO
+        self.fields["forma"].initial = "conta"
         self.fields["forma"].label = "Destino"
         self.order_fields(["arquivo", "forma", "conta", "cartao", "inverter_sinais_cartao"])
         self.estilizar()
 
     def clean(self):
-        return self.validar_pagamento(super().clean(), obrigatorio=True)
+        cd = super(MeioPagamentoMixin, self).clean()
+        forma = cd.get("forma") or "conta"
+        if forma == "cartao":
+            cd["conta"] = None
+            if not cd.get("cartao"):
+                self.add_error("cartao", "Escolha o cartão.")
+        else:
+            cd["cartao"] = None
+            if not cd.get("conta"):
+                self.add_error("conta", "Escolha a conta.")
+        return cd
 
 
 class RegraCategorizacaoForm(EstiloMixin, forms.ModelForm):

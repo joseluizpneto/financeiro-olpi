@@ -4,13 +4,17 @@
 <div class="page-head">
   <h1>Lançamentos</h1>
   <div class="d-flex flex-wrap gap-2">
-    {% if not todos %}{% include "financeiro/_mes_nav.html" %}{% endif %}
+    {% if not todos and not filtro_data %}{% include "financeiro/_mes_nav.html" %}{% elif filtro_data %}
+    <span class="badge text-bg-light border align-self-center py-2 px-3">
+      Período: {% if data_ini %}{{ data_ini|date:"d/m/Y" }}{% else %}início{% endif %} – {% if data_fim %}{{ data_fim|date:"d/m/Y" }}{% else %}hoje+{% endif %}
+    </span>
+    {% endif %}
     <div class="btn-group">
       <a class="btn btn-primary" href="{% url 'lancamento_novo' %}?tipo=D&next={{ request.get_full_path|urlencode }}"><i class="bi bi-dash-circle"></i> Despesa</a>
       <button class="btn btn-primary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-label="Mais opções"></button>
       <ul class="dropdown-menu dropdown-menu-end">
         <li><a class="dropdown-item" href="{% url 'lancamento_novo' %}?tipo=R&next={{ request.get_full_path|urlencode }}"><i class="bi bi-plus-circle text-success"></i> Receita</a></li>
-        <li><a class="dropdown-item" href="{% url 'lancamento_novo' %}?tipo=D&forma=cartao&next={{ request.get_full_path|urlencode }}"><i class="bi bi-credit-card"></i> Compra no cartão</a></li>
+        <li><a class="dropdown-item" href="{% url 'lancamento_novo' %}?tipo=D&forma=credito&next={{ request.get_full_path|urlencode }}"><i class="bi bi-credit-card"></i> Compra no cartão</a></li>
         <li><a class="dropdown-item" href="{% url 'lancamento_novo' %}?tipo=E&next={{ request.get_full_path|urlencode }}"><i class="bi bi-arrow-return-left text-info"></i> Estorno / reembolso</a></li>
         <li><a class="dropdown-item" href="{% url 'lancamento_novo' %}?tipo=T&next={{ request.get_full_path|urlencode }}"><i class="bi bi-arrow-left-right text-primary"></i> Transferência</a></li>
         <li><hr class="dropdown-divider"></li>
@@ -34,6 +38,12 @@
           <option value="E" {% if f.tipo == "E" %}selected{% endif %}>Estornos</option>
           <option value="T" {% if f.tipo == "T" %}selected{% endif %}>Transferências</option>
           <option value="F" {% if f.tipo == "F" %}selected{% endif %}>Pagamentos de fatura</option>
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <select class="form-select form-select-sm" name="forma">
+          <option value="">Todas as formas</option>
+          {% for val, rot in formas %}<option value="{{ val }}" {% if f.forma == val %}selected{% endif %}>{{ rot }}</option>{% endfor %}
         </select>
       </div>
       <div class="col-6 col-md-2">
@@ -81,10 +91,22 @@
           <option value="nao" {% if f.conciliado == "nao" %}selected{% endif %}>Não conciliados</option>
         </select>
       </div>
-      <div class="col-12 col-md-3 d-flex gap-2">
+      <div class="col-6 col-md-3 col-lg-2">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text">De</span>
+          <input class="form-control" type="date" name="data_ini" value="{{ data_ini_str }}" aria-label="Data inicial">
+        </div>
+      </div>
+      <div class="col-6 col-md-3 col-lg-2">
+        <div class="input-group input-group-sm">
+          <span class="input-group-text">Até</span>
+          <input class="form-control" type="date" name="data_fim" value="{{ data_fim_str }}" aria-label="Data final">
+        </div>
+      </div>
+      <div class="col-12 col-md-6 col-lg-5 d-flex gap-2">
         <button class="btn btn-sm btn-outline-primary"><i class="bi bi-funnel"></i> Filtrar</button>
         {% if filtros_ativos %}<a class="btn btn-sm btn-link" href="?mes={{ nav.atual }}">limpar</a>{% endif %}
-        {% if todos %}<a class="btn btn-sm btn-link ms-auto" href="?{% if querystring_sem_mes %}{{ querystring_sem_mes }}&{% endif %}mes={{ nav.atual }}">ver por mês</a>{% else %}<a class="btn btn-sm btn-link ms-auto" href="?{% if querystring_sem_mes %}{{ querystring_sem_mes }}&{% endif %}mes=todos">todos os meses</a>{% endif %}
+        {% if todos or filtro_data %}<a class="btn btn-sm btn-link ms-auto" href="?{% if querystring_sem_mes %}{{ querystring_sem_mes }}&{% endif %}mes={{ nav.atual }}">ver por mês</a>{% else %}<a class="btn btn-sm btn-link ms-auto" href="?{% if querystring_sem_mes %}{{ querystring_sem_mes }}&{% endif %}mes=todos">todos os meses</a>{% endif %}
       </div>
     </form>
   </div>
@@ -103,15 +125,21 @@
       <tbody>
       {% for l in pagina %}
         <tr>
-          <td class="tabular">{{ l.data|date:"d/m" }}</td>
+          <td class="tabular" {% if not l.pago and l.vencimento %}title="Vencimento (lançado em {{ l.data|date:'d/m/Y' }})"{% endif %}>
+            {% if todos or filtro_data %}{{ l.data_exibicao|date:"d/m/Y" }}{% else %}{{ l.data_exibicao|date:"d/m" }}{% endif %}
+            {% if not l.pago and l.vencimento %}<div class="text-body-secondary" style="font-size:.7rem">venc.</div>{% endif %}
+          </td>
           <td style="min-width:12rem">
             <a class="text-reset fw-medium" href="{% url 'lancamento_editar' l.pk %}?next={{ request.get_full_path|urlencode }}">{{ l.descricao }}</a>
             {% if l.parcela %}<span class="badge text-bg-secondary ms-1">{{ l.parcela_label }}</span>{% endif %}
             {% if l.recorrencia_id %}<i class="bi bi-arrow-repeat text-body-secondary" title="Recorrente"></i>{% endif %}
             {% if l.comprovante %}<a href="{% url 'lancamento_comprovante' l.pk %}" target="_blank" title="Ver comprovante" class="ms-1 text-body-secondary"><i class="bi bi-paperclip"></i></a>{% endif %}
-            <div class="small text-body-secondary">{% if l.tipo == "T" %}{{ l.conta.nome }} → {{ l.conta_destino.nome }}{% elif l.categoria %}{{ l.categoria }}{% else %}{{ l.get_tipo_display }}{% endif %}</div>
+            <div class="small text-body-secondary">{% if l.tipo == "T" %}{{ l.conta.banco }} → {{ l.conta_destino.banco }}{% elif l.categoria %}{{ l.categoria }}{% else %}{{ l.get_tipo_display }}{% endif %}</div>
           </td>
-          <td class="d-none d-md-table-cell small">{% if l.cartao %}<i class="bi bi-credit-card"></i> {{ l.cartao }}{% elif l.conta %}{{ l.conta }}{% endif %}</td>
+          <td class="d-none d-md-table-cell small">
+            {% if l.cartao %}<i class="bi bi-credit-card"></i> {{ l.cartao }}{% elif l.conta %}{{ l.conta }}{% endif %}
+            {% if l.forma_pagamento %}<span class="badge text-bg-light border ms-1">{{ l.get_forma_pagamento_display }}</span>{% endif %}
+          </td>
           <td class="d-none d-lg-table-cell small">
             <div>{{ l.centro|default:"" }}</div>
             {% if l.criado_por %}<div class="text-body-secondary" style="font-size:.75rem">por {{ l.criado_por.first_name|default:l.criado_por.username }}{% if l.atualizado_por and l.atualizado_por != l.criado_por %} · ed. {{ l.atualizado_por.first_name|default:l.atualizado_por.username }}{% endif %}</div>{% endif %}

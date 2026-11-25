@@ -28,14 +28,14 @@ from .utils import dia_seguro, fim_mes, hoje, inicio_mes, somar_meses
 ZERO = Decimal("0.00")
 DEC_OUT = DBDecimalField(max_digits=12, decimal_places=2)
 IMPOSTO = Q(categoria__imposto=True) | Q(categoria__pai__imposto=True)
-CENTRO_EMPRESA = Q(centro__empresa=True)
+CENTRO_EMPRESA = Q(centro__escopo=CentroCusto.EMPRESARIAL)
 
 
 def tem_empresa_ativa(request: Any | None = None) -> bool:
-    """Indica se existe ao menos um centro de custo ativo marcado como empresa."""
+    """Indica se existe ao menos um centro de custo ativo com escopo empresarial."""
     if request is not None and hasattr(request, "_tem_empresa_cache"):
         return bool(request._tem_empresa_cache)
-    resultado = CentroCusto.objects.filter(empresa=True, ativo=True).exists()
+    resultado = CentroCusto.objects.filter(escopo=CentroCusto.EMPRESARIAL, ativo=True).exists()
     if request is not None:
         request._tem_empresa_cache = resultado
     return resultado
@@ -105,7 +105,7 @@ def filtrar_escopo_contas(qs, escopo: str):
     if escopo == "pessoal":
         return qs.filter(titular__tipo=Titular.PF)
     if escopo == "empresa":
-        return qs.filter(Q(titular__tipo=Titular.PJ) | Q(centro_padrao__empresa=True))
+        return qs.filter(Q(titular__tipo=Titular.PJ) | Q(centro_padrao__escopo=CentroCusto.EMPRESARIAL))
     return qs
 
 
@@ -177,7 +177,7 @@ def verificar_bloqueio_lancamento(
         return f"O mês {mes_ref:%m/%Y} está fechado. Reabra-o em Fechamento Mensal para alterar lançamentos."
     for c in (conta, conta_destino):
         if c is not None and c.bloqueado_ate and data_ref <= c.bloqueado_ate:
-            return f"A conta “{c.nome}” está bloqueada para edições até {c.bloqueado_ate:%d/%m/%Y}."
+            return f"A conta “{c.banco}” está bloqueada para edições até {c.bloqueado_ate:%d/%m/%Y}."
     return None
 
 
@@ -398,6 +398,7 @@ def criar_parcelado(base: Lancamento, n: int) -> list[Lancamento]:
             data=somar_meses(base.data, k),
             cartao=base.cartao,
             fatura=fatura_k,
+            forma_pagamento=base.forma_pagamento,
             categoria=base.categoria,
             centro=base.centro,
             veiculo=base.veiculo,
@@ -472,6 +473,7 @@ def sincronizar_recorrencia(r: Recorrencia) -> None:
             item.descricao, item.valor, item.tipo = r.descricao, r.valor, r.tipo
             item.categoria, item.centro, item.veiculo = r.categoria, r.centro, r.veiculo
             item.conta, item.cartao = r.conta, r.cartao
+            item.forma_pagamento = r.forma_pagamento
             item.pago = bool(r.cartao_id)
             item.atualizado_por = r.atualizado_por
             item.save()
@@ -528,6 +530,7 @@ def sincronizar_lancamento_veiculo(
     categoria_nome: str,
     conta: Conta | None = None,
     cartao: Cartao | None = None,
+    forma_pagamento: str = "",
     usuario: Any = None,
 ) -> None:
     """Mantém o lançamento financeiro ligado a um abastecimento ou manutenção."""
@@ -548,6 +551,7 @@ def sincronizar_lancamento_veiculo(
         lanc.vencimento = obj.data
         lanc.conta = conta
         lanc.cartao = cartao
+        lanc.forma_pagamento = forma_pagamento
         lanc.pago = True
         lanc.data_pagamento = obj.data if not cartao else lanc.data_pagamento
         lanc.atualizado_por = usuario
@@ -781,18 +785,18 @@ def fluxo_caixa_projetado(dias: int = 60, conta_id: int | None = None, escopo: s
     for l in pendentes:
         data_ev = l.vencimento or l.data
         if l.tipo == Lancamento.RECEITA and l.conta_id in ids_contas:
-            _adicionar_evento(data_ev, l.descricao, l.valor, "A receber", l.conta.nome)
+            _adicionar_evento(data_ev, l.descricao, l.valor, "A receber", l.conta.banco)
         elif l.tipo == Lancamento.ESTORNO and l.conta_id in ids_contas:
-            _adicionar_evento(data_ev, l.descricao, l.valor, "Estorno previsto", l.conta.nome)
+            _adicionar_evento(data_ev, l.descricao, l.valor, "Estorno previsto", l.conta.banco)
         elif l.tipo == Lancamento.DESPESA and l.conta_id in ids_contas:
-            _adicionar_evento(data_ev, l.descricao, -l.valor, "A pagar", l.conta.nome)
+            _adicionar_evento(data_ev, l.descricao, -l.valor, "A pagar", l.conta.banco)
         elif l.tipo == Lancamento.TRANSFERENCIA:
             sai = l.conta_id in ids_contas
             entra = l.conta_destino_id in ids_contas
             if sai and not entra:
-                _adicionar_evento(data_ev, f"{l.descricao} (saída)", -l.valor, "Transferência", l.conta.nome)
+                _adicionar_evento(data_ev, f"{l.descricao} (saída)", -l.valor, "Transferência", l.conta.banco)
             elif entra and not sai:
-                _adicionar_evento(data_ev, f"{l.descricao} (entrada)", l.valor, "Transferência", l.conta_destino.nome)
+                _adicionar_evento(data_ev, f"{l.descricao} (entrada)", l.valor, "Transferência", l.conta_destino.banco)
 
     # 2. Faturas em aberto
     faturas_abertas = Fatura.objects.com_totais().filter(paga=False, vencimento__lte=fim).select_related(
@@ -813,10 +817,10 @@ def fluxo_caixa_projetado(dias: int = 60, conta_id: int | None = None, escopo: s
                 continue
         _adicionar_evento(
             f.vencimento,
-            f"Fatura {f.cartao.nome} ({f.referencia:%m/%Y})",
+            f"Fatura {f.cartao.banco} ({f.referencia:%m/%Y})",
             -f.saldo,
             "Fatura cartão",
-            conta_pg.nome if conta_pg else "Sem conta vinculada",
+            conta_pg.banco if conta_pg else "Sem conta vinculada",
         )
 
     # 3. Recorrências futuras ainda não materializadas
@@ -829,7 +833,7 @@ def fluxo_caixa_projetado(dias: int = 60, conta_id: int | None = None, escopo: s
                 if r.conta_id not in ids_contas:
                     continue
                 v = r.valor if r.tipo == Lancamento.RECEITA else -r.valor
-                _adicionar_evento(d, f"{r.descricao} (recorrente)", v, "Recorrência", r.conta.nome)
+                _adicionar_evento(d, f"{r.descricao} (recorrente)", v, "Recorrência", r.conta.banco)
             elif r.cartao_id:
                 ref = r.cartao.referencia_para(d)
                 fat_v = r.cartao.fatura_virtual(ref)
@@ -851,7 +855,7 @@ def fluxo_caixa_projetado(dias: int = 60, conta_id: int | None = None, escopo: s
                     f"{r.descricao} (recorrente cartão)",
                     v,
                     "Recorrência cartão",
-                    conta_pg.nome if conta_pg else r.cartao.nome,
+                    conta_pg.banco if conta_pg else r.cartao.banco,
                 )
 
     eventos.sort(key=lambda e: (e["data_caixa"], e["data"], e["descricao"]))

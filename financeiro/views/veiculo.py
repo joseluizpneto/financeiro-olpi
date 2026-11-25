@@ -77,6 +77,7 @@ def _form_veiculo(request: HttpRequest, form_cls, veiculo_obj: Veiculo, inst, ti
                     categoria,
                     conta=cd.get("conta"),
                     cartao=cd.get("cartao"),
+                    forma_pagamento=cd.get("forma") or "",
                     usuario=request.user,
                 )
                 registrar_auditoria(

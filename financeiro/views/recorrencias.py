@@ -16,7 +16,7 @@ from ..models import Lancamento, Recorrencia, RegistroAuditoria
 from ..utils import hoje
 from ._comum import ZERO, _render_form
 
-CAMPOS_RECORRENCIA = ["descricao", "tipo", "valor", "intervalo_meses", "dia", "conta", "cartao", "categoria", "centro", "ativo"]
+CAMPOS_RECORRENCIA = ["descricao", "tipo", "valor", "intervalo_meses", "dia", "forma_pagamento", "conta", "cartao", "categoria", "centro", "ativo"]
 
 
 @login_required

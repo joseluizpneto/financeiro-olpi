@@ -12,7 +12,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Case, DateField, F, Q, When
 from django.http import FileResponse, Http404, HttpRequest, HttpResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -25,7 +25,7 @@ from ..forms import ImportacaoForm, LancamentoForm, categorias_qs
 from ..importacao import analisar_arquivo_extrato, confirmar_importacao
 from ..models import Cartao, Categoria, CentroCusto, Conta, Lancamento, RegistroAuditoria
 from ..security import csv_seguro
-from ..utils import fim_mes, hoje, mes_str, parse_mes
+from ..utils import fim_mes, hoje, mes_str, parse_data, parse_mes
 from ._comum import _nav_mes, _render_form, _voltar
 
 User = get_user_model()
@@ -52,8 +52,26 @@ def _filtrar_lancamentos(request: HttpRequest):
         "atualizado_por",
     )
     todos = g.get("mes") == "todos"
-    if not todos:
-        qs = qs.filter(data__gte=ini, data__lte=fim_mes(ini))
+    data_ini = parse_data(g.get("data_ini"))
+    data_fim = parse_data(g.get("data_fim"))
+    if data_ini and data_fim and data_ini > data_fim:
+        data_ini, data_fim = data_fim, data_ini
+    filtro_data = bool(data_ini or data_fim)
+
+    qs = qs.annotate(
+        data_efetiva=Case(
+            When(pago=False, vencimento__isnull=False, then=F("vencimento")),
+            default=F("data"),
+            output_field=DateField(),
+        )
+    )
+    if filtro_data:
+        if data_ini:
+            qs = qs.filter(data_efetiva__gte=data_ini)
+        if data_fim:
+            qs = qs.filter(data_efetiva__lte=data_fim)
+    elif not todos:
+        qs = qs.filter(data_efetiva__gte=ini, data_efetiva__lte=fim_mes(ini))
     conta = g.get("conta", "")
     if conta.isdigit():
         qs = qs.filter(Q(conta_id=conta) | Q(conta_destino_id=conta))
@@ -67,6 +85,9 @@ def _filtrar_lancamentos(request: HttpRequest):
     tipo = g.get("tipo", "")
     if tipo in ("R", "D", "E", "T", "F"):
         qs = qs.filter(tipo=tipo)
+    forma = g.get("forma", "")
+    if forma in ("pix", "debito", "credito", "dinheiro"):
+        qs = qs.filter(forma_pagamento=forma)
     situacao = g.get("situacao", "")
     if situacao == "pago":
         qs = qs.filter(pago=True)
@@ -82,20 +103,27 @@ def _filtrar_lancamentos(request: HttpRequest):
     busca = g.get("q", "").strip()
     if busca:
         qs = qs.filter(Q(descricao__icontains=busca) | Q(observacao__icontains=busca))
-    return qs, ini, todos
+    qs = qs.order_by("-data_efetiva", "-id")
+    return qs, ini, todos, data_ini, data_fim
 
 
 @login_required
 def lancamentos(request: HttpRequest) -> HttpResponse:
-    qs, ini, todos = _filtrar_lancamentos(request)
+    qs, ini, todos, data_ini, data_fim = _filtrar_lancamentos(request)
+    filtro_data = bool(data_ini or data_fim)
     pagina = Paginator(qs, 50).get_page(request.GET.get("page"))
     g = request.GET.copy()
     g.pop("page", None)
     g_sem_mes = g.copy()
     g_sem_mes.pop("mes", None)
+    g_sem_mes.pop("data_ini", None)
+    g_sem_mes.pop("data_fim", None)
     filtros_ativos = any(
         request.GET.get(k)
-        for k in ("conta", "cartao", "centro", "categoria", "tipo", "situacao", "q", "veiculo", "criado_por", "conciliado")
+        for k in (
+            "conta", "cartao", "centro", "categoria", "tipo", "forma", "situacao",
+            "q", "veiculo", "criado_por", "conciliado", "data_ini", "data_fim",
+        )
     )
     return render(
         request,
@@ -104,14 +132,20 @@ def lancamentos(request: HttpRequest) -> HttpResponse:
             "pagina": pagina,
             "nav": _nav_mes(request, ini),
             "todos": todos,
+            "filtro_data": filtro_data,
+            "data_ini": data_ini,
+            "data_fim": data_fim,
+            "data_ini_str": data_ini.isoformat() if data_ini else "",
+            "data_fim_str": data_fim.isoformat() if data_fim else "",
             "receitas": sv.soma(qs.filter(tipo="R")),
             "despesas": sv.despesas_liquidas(qs),
             "querystring": g.urlencode(),
             "querystring_sem_mes": g_sem_mes.urlencode(),
             "filtros_ativos": filtros_ativos,
             "f": request.GET,
+            "formas": Lancamento.FORMAS_PAGAMENTO,
             "contas": Conta.objects.select_related("titular"),
-            "cartoes": Cartao.objects.all(),
+            "cartoes": Cartao.objects.select_related("titular"),
             "centros": CentroCusto.objects.all(),
             "categorias": categorias_qs(),
             "usuarios": User.objects.order_by("username"),
@@ -138,13 +172,18 @@ def lancamento_form(request: HttpRequest, pk: int | None = None, duplicar_pk: in
         if duplicar_pk:
             orig = get_object_or_404(Lancamento, pk=duplicar_pk)
             if orig.tipo in (Lancamento.RECEITA, Lancamento.DESPESA, Lancamento.ESTORNO, Lancamento.TRANSFERENCIA):
+                forma_orig = orig.forma_pagamento or (
+                    Lancamento.FORMA_CREDITO
+                    if orig.cartao_id
+                    else (Lancamento.FORMA_DINHEIRO if (orig.conta_id and orig.conta.tipo == "carteira") else Lancamento.FORMA_PIX)
+                )
                 initial = {
                     "tipo": orig.tipo,
                     "descricao": orig.descricao,
                     "valor": orig.valor,
                     "data": hoje(),
                     "pago": True,
-                    "forma": "cartao" if orig.cartao_id else "conta",
+                    "forma": forma_orig,
                     "conta": orig.conta_id,
                     "conta_destino": orig.conta_destino_id,
                     "cartao": orig.cartao_id,
@@ -157,11 +196,18 @@ def lancamento_form(request: HttpRequest, pk: int | None = None, duplicar_pk: in
                 }
         else:
             tipo = request.GET.get("tipo", "D")
+            forma_get = request.GET.get("forma", "")
+            if request.GET.get("cartao") or forma_get in ("cartao", Lancamento.FORMA_CREDITO):
+                forma_init = Lancamento.FORMA_CREDITO
+            elif forma_get in (Lancamento.FORMA_PIX, Lancamento.FORMA_DEBITO, Lancamento.FORMA_DINHEIRO):
+                forma_init = forma_get
+            else:
+                forma_init = Lancamento.FORMA_PIX
             initial = {
                 "tipo": tipo if tipo in ("R", "D", "E", "T") else "D",
                 "data": hoje(),
                 "pago": True,
-                "forma": "cartao" if (request.GET.get("cartao") or request.GET.get("forma") == "cartao") else "conta",
+                "forma": forma_init,
             }
             for campo in ("conta", "cartao", "categoria", "centro", "veiculo"):
                 valor = request.GET.get(campo, "")
@@ -234,8 +280,10 @@ def lancamento_form(request: HttpRequest, pk: int | None = None, duplicar_pk: in
                     messages.success(request, "Lançamento salvo.")
             if request.POST.get("acao") == "salvar_novo":
                 qs_novo = f"?tipo={lanc.tipo}"
+                if lanc.forma_pagamento:
+                    qs_novo += f"&forma={lanc.forma_pagamento}"
                 if lanc.cartao_id:
-                    qs_novo += f"&forma=cartao&cartao={lanc.cartao_id}"
+                    qs_novo += f"&cartao={lanc.cartao_id}"
                 elif lanc.conta_id:
                     qs_novo += f"&conta={lanc.conta_id}"
                 nxt = request.POST.get("next") or request.GET.get("next")
@@ -243,7 +291,7 @@ def lancamento_form(request: HttpRequest, pk: int | None = None, duplicar_pk: in
                     from urllib.parse import quote
                     qs_novo += f"&next={quote(nxt)}"
                 return redirect(f"{reverse('lancamento_novo')}{qs_novo}")
-            return redirect(_voltar(request, f"{reverse('lancamentos')}?mes={mes_str(lanc.data)}"))
+            return redirect(_voltar(request, f"{reverse('lancamentos')}?mes={mes_str(lanc.data_exibicao)}"))
 
     extra = {"js_forma": True, "permitir_salvar_novo": inst is None, "auditoria_obj": inst}
     if inst:
@@ -270,7 +318,7 @@ def lancamento_excluir(request: HttpRequest, pk: int) -> HttpResponse:
     if hasattr(lanc, "abastecimento") or hasattr(lanc, "manutencao"):
         messages.error(request, "Lançamentos do veículo devem ser excluídos pela tela do veículo.")
         return redirect(_voltar(request, reverse("lancamentos")))
-    destino = _voltar(request, f"{reverse('lancamentos')}?mes={mes_str(lanc.data)}")
+    destino = _voltar(request, f"{reverse('lancamentos')}?mes={mes_str(lanc.data_exibicao)}")
     if request.POST.get("todas") and lanc.grupo_parcelas:
         itens = list(Lancamento.objects.filter(grupo_parcelas=lanc.grupo_parcelas))
     else:
@@ -355,22 +403,29 @@ def lancamento_conciliar(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def exportar_csv(request: HttpRequest) -> StreamingHttpResponse:
-    qs, ini, todos = _filtrar_lancamentos(request)
-    nome = "lancamentos.csv" if todos else f"lancamentos_{mes_str(ini)}.csv"
+    qs, ini, todos, data_ini, data_fim = _filtrar_lancamentos(request)
+    if data_ini or data_fim:
+        sufixo = f"{data_ini.isoformat() if data_ini else 'inicio'}_{data_fim.isoformat() if data_fim else 'fim'}"
+        nome = f"lancamentos_{sufixo}.csv"
+    elif todos:
+        nome = "lancamentos.csv"
+    else:
+        nome = f"lancamentos_{mes_str(ini)}.csv"
 
     def linhas():
         writer = csv.writer(_Echo(), delimiter=";")
         yield "\ufeff"
         yield writer.writerow([
-            "Data", "Vencimento", "Tipo", "Descrição", "Parcela", "Valor", "Situação",
+            "Data", "Vencimento", "Tipo", "Forma de pagamento", "Descrição", "Parcela", "Valor", "Situação",
             "Conciliado", "Data pagamento", "Conta", "Conta destino", "Cartão", "Fatura",
             "Categoria", "Centro de custo", "Veículo", "Lançado por", "Observação",
         ])
-        for l in qs.order_by("data", "id").iterator(chunk_size=500):
+        for l in qs.order_by("data_efetiva", "id").iterator(chunk_size=500):
             yield writer.writerow([
                 l.data.strftime("%d/%m/%Y"),
                 l.vencimento.strftime("%d/%m/%Y") if l.vencimento else "",
                 l.get_tipo_display(),
+                l.get_forma_pagamento_display() if l.forma_pagamento else "",
                 csv_seguro(l.descricao),
                 l.parcela_label,
                 str(l.valor).replace(".", ","),

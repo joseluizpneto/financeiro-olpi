@@ -4,7 +4,7 @@
 {% if not centro %}
 <div class="page-head"><h1>Empresa</h1></div>
 <div class="alert alert-info d-flex flex-wrap align-items-center justify-content-between gap-2">
-  <div>Nenhuma empresa cadastrada ainda. Marque um centro de custo como <strong>“é empresa”</strong> em <a href="{% url 'config_lista' 'centros' %}">Configurações › Centros de custo</a> para ativar este relatório.</div>
+  <div>Nenhuma empresa cadastrada ainda. Defina um centro de custo com escopo <strong>“Empresarial”</strong> em <a href="{% url 'config_lista' 'centros' %}">Configurações › Centros de custo</a> para ativar este relatório.</div>
   <a class="btn btn-sm btn-primary" href="{% url 'config_novo' 'centros' %}">Cadastrar empresa</a>
 </div>
 {% else %}
@@ -65,7 +65,7 @@
     <div class="card">
       <div class="card-header">Contas da empresa</div>
       <ul class="list-group list-group-flush">
-        {% for c in contas %}<li class="list-group-item d-flex justify-content-between"><a class="text-reset" href="{% url 'conta_extrato' c.pk %}">{{ c.nome }}</a><span class="valor {{ c.saldo_atual|neg }}">{{ c.saldo_atual|brl }}</span></li>
+        {% for c in contas %}<li class="list-group-item d-flex justify-content-between"><a class="text-reset" href="{% url 'conta_extrato' c.pk %}">{{ c.banco }}</a><span class="valor {{ c.saldo_atual|neg }}">{{ c.saldo_atual|brl }}</span></li>
         {% empty %}<li class="list-group-item small text-body-secondary">Defina o centro de custo padrão “{{ centro.nome }}” na conta bancária da empresa para vê-la aqui e preencher o centro automaticamente.</li>{% endfor %}
       </ul>
     </div>

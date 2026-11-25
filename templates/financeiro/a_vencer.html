@@ -20,7 +20,7 @@
       <div class="data-badge"><div class="dia {% if i.data < hoje %}text-danger{% endif %}">{{ i.data|date:"d" }}</div><div class="mes">{{ i.data|date:"M" }}</div></div>
       {% if i.fatura %}
         <div class="flex-grow-1 min-w-0">
-          <a class="fw-medium text-reset d-block text-truncate" href="{% url 'fatura' i.fatura.pk %}"><i class="bi bi-credit-card"></i> Fatura {{ i.fatura.cartao.nome }} · {{ i.fatura.referencia|date:"m/Y" }}</a>
+          <a class="fw-medium text-reset d-block text-truncate" href="{% url 'fatura' i.fatura.pk %}"><i class="bi bi-credit-card"></i> Fatura {{ i.fatura.cartao.banco }} · {{ i.fatura.referencia|date:"m/Y" }}</a>
           <div class="small text-body-secondary">{{ i.fatura.situacao }}</div>
         </div>
         <div class="valor fw-semibold text-danger">{{ i.valor|brl }}</div>

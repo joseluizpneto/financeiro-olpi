@@ -14,6 +14,7 @@ from .models import RegistroAuditoria
 
 CAMPOS_LANCAMENTO = [
     "tipo",
+    "forma_pagamento",
     "descricao",
     "valor",
     "data",

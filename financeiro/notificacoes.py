@@ -54,7 +54,7 @@ def formatar_mensagem_alertas(resumo: dict[str, Any]) -> str:
     if resumo["faturas"]:
         linhas.append("\nFaturas de cartão:")
         for f in resumo["faturas"]:
-            linhas.append(f"- {f.cartao.nome} (vence {f.vencimento:%d/%m}): R$ {f.saldo:.2f}")
+            linhas.append(f"- {f.cartao.banco} (vence {f.vencimento:%d/%m}): R$ {f.saldo:.2f}")
     if resumo["pendentes"]:
         linhas.append(f"\nContas atrasadas ou até {resumo['dias_vencimento']} dia(s):")
         for l in resumo["pendentes"]:

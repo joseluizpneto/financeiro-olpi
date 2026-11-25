@@ -28,6 +28,8 @@ def _nav_mes(request: HttpRequest, ini: date) -> dict[str, Any]:
         g = request.GET.copy()
         g["mes"] = mes_str(mes)
         g.pop("page", None)
+        g.pop("data_ini", None)
+        g.pop("data_fim", None)
         return g.urlencode()
 
     return {

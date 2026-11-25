@@ -72,7 +72,7 @@
         <li class="list-group-item d-flex align-items-center gap-3">
           <div class="data-badge"><div class="dia">{{ f.vencimento|date:"d" }}</div><div class="mes">{{ f.vencimento|date:"M" }}</div></div>
           <div class="flex-grow-1 min-w-0">
-            <a href="{% url 'fatura' f.pk %}" class="fw-medium text-reset d-block text-truncate">Fatura {{ f.cartao.nome }}</a>
+            <a href="{% url 'fatura' f.pk %}" class="fw-medium text-reset d-block text-truncate">Fatura {{ f.cartao.banco }}</a>
             <div class="small text-body-secondary">{{ f.situacao }}{% if f.vencimento < hoje %} · <span class="text-danger">vencida</span>{% endif %}</div>
           </div>
           <div class="valor fw-semibold text-danger">{{ f.saldo|brl }}</div>
@@ -84,7 +84,7 @@
           <div class="data-badge"><div class="dia {% if l.vencimento < hoje %}text-danger{% endif %}">{{ l.vencimento|date:"d" }}</div><div class="mes">{{ l.vencimento|date:"M" }}</div></div>
           <div class="flex-grow-1 min-w-0">
             <a href="{% url 'lancamento_editar' l.pk %}?next={{ request.get_full_path|urlencode }}" class="fw-medium text-reset d-block text-truncate">{{ l.descricao }}</a>
-            <div class="small text-body-secondary text-truncate">{{ l.conta.nome }}{% if l.categoria %} · {{ l.categoria }}{% endif %}{% if l.vencimento < hoje %} · <span class="text-danger">atrasado</span>{% endif %}</div>
+            <div class="small text-body-secondary text-truncate">{{ l.conta.banco }}{% if l.categoria %} · {{ l.categoria }}{% endif %}{% if l.vencimento < hoje %} · <span class="text-danger">atrasado</span>{% endif %}</div>
           </div>
           <div class="valor fw-semibold {{ l.tipo|cor_tipo }}">{{ l.tipo|sinal_tipo }}{{ l.valor|brl }}</div>
           <form method="post" action="{% url 'lancamento_pagar' l.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
@@ -146,7 +146,7 @@
         <li class="list-group-item">
           <div class="d-flex justify-content-between fw-semibold"><span>{{ t.titular }}</span><span class="valor {{ t.total|neg }}">{{ t.total|brl }}</span></div>
           {% for c in t.contas %}
-          <div class="d-flex justify-content-between small ps-2 mt-1"><a class="text-body-secondary" href="{% url 'conta_extrato' c.pk %}">{{ c.nome }}{% if c.banco %} · {{ c.banco }}{% endif %}</a><span class="valor {{ c.saldo_atual|neg }}">{{ c.saldo_atual|brl }}</span></div>
+          <div class="d-flex justify-content-between small ps-2 mt-1"><a class="text-body-secondary" href="{% url 'conta_extrato' c.pk %}">{{ c.banco }}</a><span class="valor {{ c.saldo_atual|neg }}">{{ c.saldo_atual|brl }}</span></div>
           {% endfor %}
         </li>
         {% endfor %}
@@ -162,9 +162,9 @@
         <li class="list-group-item">
           <div class="d-flex justify-content-between">
             {% if c.atual.pk %}
-              <a class="fw-medium text-reset" href="{% url 'fatura' c.atual.pk %}">{{ c.cartao.nome }}</a>
+              <a class="fw-medium text-reset" href="{% url 'fatura' c.atual.pk %}">{{ c.cartao.banco }}</a>
             {% else %}
-              <a class="fw-medium text-reset" href="{% url 'fatura_mes' c.cartao.pk c.atual.referencia|date:'Y-m' %}">{{ c.cartao.nome }}</a>
+              <a class="fw-medium text-reset" href="{% url 'fatura_mes' c.cartao.pk c.atual.referencia|date:'Y-m' %}">{{ c.cartao.banco }}</a>
             {% endif %}
             <span class="valor fw-semibold">{{ c.atual.total|brl }}</span>
           </div>
