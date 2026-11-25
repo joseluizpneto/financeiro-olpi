@@ -6,7 +6,6 @@ from django.shortcuts import render
 
 from .. import services as sv
 from ..models import CentroCusto
-from ..utils import parse_mes
 from ._comum import _ano, _escopo, _nav_mes
 
 
@@ -17,7 +16,7 @@ def empresa(request: HttpRequest) -> HttpResponse:
         return render(request, "financeiro/empresa.html", {"centro": None})
     sel = request.GET.get("centro", "")
     centro = next((c for c in centros if str(c.pk) == sel), centros[0])
-    ini = parse_mes(request.GET.get("mes"))
+    ini = sv.parse_mes_ciclo(request.GET.get("mes"))
     dados = sv.resumo_empresa(centro, ini)
     meses = dados["meses"]
     return render(
@@ -63,7 +62,7 @@ def relatorios(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def rateio(request: HttpRequest) -> HttpResponse:
-    ini = parse_mes(request.GET.get("mes"))
+    ini = sv.parse_mes_ciclo(request.GET.get("mes"))
     modo = request.GET.get("modo", "igual")
     if modo not in ("igual", "renda"):
         modo = "igual"

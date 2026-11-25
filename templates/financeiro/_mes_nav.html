@@ -1,5 +1,10 @@
-<div class="btn-group" role="group" aria-label="Mês">
-  <a class="btn btn-outline-secondary" href="?{{ nav.qs_anterior }}" aria-label="Mês anterior"><i class="bi bi-chevron-left"></i></a>
-  <a class="btn btn-outline-secondary" style="min-width:10rem" href="?{{ nav.qs_hoje }}" title="Voltar ao mês atual">{{ nav.mes|date:"F \d\e Y"|capfirst }}</a>
-  <a class="btn btn-outline-secondary" href="?{{ nav.qs_proximo }}" aria-label="Próximo mês"><i class="bi bi-chevron-right"></i></a>
+<div class="d-flex flex-column align-items-end">
+  <div class="btn-group" role="group" aria-label="Mês">
+    <a class="btn btn-outline-secondary" href="?{{ nav.qs_anterior }}" aria-label="Mês anterior"><i class="bi bi-chevron-left"></i></a>
+    <a class="btn btn-outline-secondary" style="min-width:10rem" href="?{{ nav.qs_hoje }}" title="{% if nav.ciclo_customizado %}{{ nav.periodo_inicio|date:'d/m/Y' }} a {{ nav.periodo_fim|date:'d/m/Y' }} · Clique para voltar ao ciclo atual{% else %}Voltar ao mês atual{% endif %}">{{ nav.mes|date:"F \d\e Y"|capfirst }}</a>
+    <a class="btn btn-outline-secondary" href="?{{ nav.qs_proximo }}" aria-label="Próximo mês"><i class="bi bi-chevron-right"></i></a>
+  </div>
+  {% if nav.ciclo_customizado %}
+  <small class="text-body-secondary mt-1">Ciclo: {{ nav.periodo_inicio|date:"d/m" }} a {{ nav.periodo_fim|date:"d/m" }}</small>
+  {% endif %}
 </div>

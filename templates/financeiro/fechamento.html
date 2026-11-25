@@ -16,7 +16,7 @@
   <div class="col-lg-7">
     <div class="card mb-3">
       <div class="card-header d-flex justify-content-between align-items-center">
-        <span>Checklist de conferência · <span class="text-capitalize">{{ nav.mes|date:"F/Y" }}</span></span>
+        <span>Checklist de conferência · <span class="text-capitalize">{{ nav.mes|date:"F/Y" }}</span>{% if nav.ciclo_customizado %} <small class="text-body-secondary">({{ periodo_inicio|date:"d/m/Y" }} a {{ periodo_fim|date:"d/m/Y" }})</small>{% endif %}</span>
         {% if fechamento and fechamento.fechado %}<span class="badge bg-success-subtle text-success-emphasis"><i class="bi bi-lock-fill"></i> Fechado</span>{% else %}<span class="badge bg-warning-subtle text-warning-emphasis">Aberto</span>{% endif %}
       </div>
       <ul class="list-group list-group-flush">
@@ -29,8 +29,8 @@
           {% if faturas_abertas == 0 %}<span class="text-success fw-semibold"><i class="bi bi-check-circle-fill"></i> Sem pendências</span>{% else %}<a href="{% url 'cartoes' %}" class="text-warning-emphasis fw-semibold">{{ faturas_abertas }} em aberto</a>{% endif %}
         </li>
         <li class="list-group-item d-flex justify-content-between">
-          <span>Movimentos em conta ainda não conciliados</span>
-          {% if nao_conciliados == 0 %}<span class="text-success fw-semibold"><i class="bi bi-check-circle-fill"></i> 100% conciliado</span>{% else %}<a href="{% url 'lancamentos' %}?mes={{ nav.atual }}&conciliado=nao" class="text-warning-emphasis fw-semibold">{{ nao_conciliados }} item(ns)</a>{% endif %}
+          <span>Saldo em contas em {{ periodo_fim|date:"d/m/Y" }}</span>
+          <span class="fw-semibold tabular {{ saldo_contas_fim|neg }}">{{ saldo_contas_fim|brl }}</span>
         </li>
       </ul>
     </div>

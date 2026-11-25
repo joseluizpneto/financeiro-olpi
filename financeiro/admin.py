@@ -196,7 +196,7 @@ class FechamentoMensalAdmin(admin.ModelAdmin):
 
 @admin.register(ConfiguracaoSistema)
 class ConfiguracaoSistemaAdmin(admin.ModelAdmin):
-    list_display = ["nome_sistema", "subtitulo_sistema"]
+    list_display = ["nome_sistema", "subtitulo_sistema", "dia_inicio_ciclo", "referencia_ciclo"]
 
     def has_add_permission(self, request):
         if ConfiguracaoSistema.objects.exists():

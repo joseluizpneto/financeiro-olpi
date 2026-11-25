@@ -12,7 +12,7 @@ from django.db.models import F, Q
 from django.db.models.functions import Coalesce
 
 from .models import (
-    Abastecimento, Cartao, Categoria, CentroCusto, Conta, FechamentoMensal,
+    Abastecimento, Cartao, Categoria, CentroCusto, ConfiguracaoSistema, Conta, FechamentoMensal,
     Lancamento, Manutencao, MetaFinanceira, Orcamento, Recorrencia, RegraCategorizacao,
     Titular, Veiculo,
 )
@@ -771,3 +771,16 @@ class IntegracaoGitForm(EstiloMixin, forms.Form):
         if not br:
             raise forms.ValidationError("Nome de branch inválido.")
         return br
+
+
+class CicloFinanceiroForm(EstiloMixin, forms.ModelForm):
+    class Meta:
+        model = ConfiguracaoSistema
+        fields = ["dia_inicio_ciclo", "referencia_ciclo"]
+        widgets = {
+            "referencia_ciclo": forms.RadioSelect,
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.estilizar()

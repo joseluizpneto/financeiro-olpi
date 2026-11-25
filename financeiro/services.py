@@ -15,20 +15,63 @@ from django.db.models import (
 )
 from django.db.models.functions import Coalesce, TruncMonth
 from django.db.models.signals import post_delete, post_save
+from django.db.utils import OperationalError, ProgrammingError
 from django.dispatch import receiver
 from django.utils import timezone
 
 from .audit import registrar_auditoria
 from .models import (
-    Cartao, Categoria, CentroCusto, Conta, Fatura, FechamentoMensal, Lancamento,
+    Cartao, Categoria, CentroCusto, ConfiguracaoSistema, Conta, Fatura, FechamentoMensal, Lancamento,
     MetaFinanceira, Orcamento, Recorrencia, RegistroAuditoria, Titular, Veiculo,
 )
-from .utils import dia_seguro, fim_mes, hoje, inicio_mes, somar_meses
+from .utils import (
+    dia_seguro, fim_mes, hoje, inicio_mes, intervalo_ciclo, mes_referencia_ciclo, parse_mes, somar_meses,
+)
 
 ZERO = Decimal("0.00")
 DEC_OUT = DBDecimalField(max_digits=12, decimal_places=2)
 IMPOSTO = Q(categoria__imposto=True) | Q(categoria__pai__imposto=True)
 CENTRO_EMPRESA = Q(centro__escopo=CentroCusto.EMPRESARIAL)
+CACHE_KEY_CICLO = "config_ciclo_financeiro"
+
+
+def obter_config_ciclo() -> tuple[int, str]:
+    """Retorna `(dia_inicio_ciclo, referencia_ciclo)` com cache."""
+    cached = cache.get(CACHE_KEY_CICLO)
+    if cached is not None:
+        return cached
+    try:
+        row = ConfiguracaoSistema.objects.order_by("pk").values_list("dia_inicio_ciclo", "referencia_ciclo").first()
+    except (OperationalError, ProgrammingError):
+        return 1, ConfiguracaoSistema.CICLO_SEGUINTE
+    if row is None:
+        res = (1, ConfiguracaoSistema.CICLO_SEGUINTE)
+    else:
+        dia, ref = row
+        dia = min(max(int(dia or 1), 1), 31)
+        if ref not in (ConfiguracaoSistema.CICLO_SEGUINTE, ConfiguracaoSistema.CICLO_ATUAL):
+            ref = ConfiguracaoSistema.CICLO_SEGUINTE
+        res = (dia, ref)
+    cache.set(CACHE_KEY_CICLO, res, timeout=3600)
+    return res
+
+
+def periodo_mes(ini: date) -> tuple[date, date]:
+    """Retorna `(data_inicio, data_fim)` do ciclo correspondente ao mês de referência `ini`."""
+    dia, ref = obter_config_ciclo()
+    return intervalo_ciclo(ini, dia_inicio=dia, referencia=ref)
+
+
+def mes_referencia_atual(d: date | None = None) -> date:
+    """Retorna o 1º dia do mês de referência do ciclo para a data `d` (ou hoje)."""
+    dia, ref = obter_config_ciclo()
+    return mes_referencia_ciclo(d or hoje(), dia_inicio=dia, referencia=ref)
+
+
+def parse_mes_ciclo(valor: str | None, padrao: date | None = None) -> date:
+    """Interpreta 'AAAA-MM' ou usa o mês de referência atual conforme o ciclo configurado."""
+    dia, ref = obter_config_ciclo()
+    return parse_mes(valor, padrao, dia_inicio=dia, referencia=ref)
 
 
 def tem_empresa_ativa(request: Any | None = None) -> bool:
@@ -77,6 +120,7 @@ def _por(qs, campo: str) -> dict[Any, Decimal]:
 
 
 def por_mes(qs, liquido_despesa: bool = False) -> dict[date, Decimal]:
+    dia, ref = obter_config_ciclo()
     if liquido_despesa:
         expr = Sum(
             Case(
@@ -86,11 +130,23 @@ def por_mes(qs, liquido_despesa: bool = False) -> dict[date, Decimal]:
                 output_field=DEC_OUT,
             )
         )
-        return {
-            r["m"]: (r["t"] or ZERO)
-            for r in qs.annotate(m=TruncMonth("data")).order_by().values("m").annotate(t=expr)
-        }
-    return {r["m"]: r["t"] for r in qs.annotate(m=TruncMonth("data")).order_by().values("m").annotate(t=Sum("valor"))}
+        if dia == 1:
+            return {
+                r["m"]: (r["t"] or ZERO)
+                for r in qs.annotate(m=TruncMonth("data")).order_by().values("m").annotate(t=expr)
+            }
+        totais: dict[date, Decimal] = defaultdict(lambda: ZERO)
+        for r in qs.order_by().values("data").annotate(t=expr):
+            m = mes_referencia_ciclo(r["data"], dia, ref)
+            totais[m] += r["t"] or ZERO
+        return dict(totais)
+    if dia == 1:
+        return {r["m"]: r["t"] for r in qs.annotate(m=TruncMonth("data")).order_by().values("m").annotate(t=Sum("valor"))}
+    totais = defaultdict(lambda: ZERO)
+    for r in qs.order_by().values("data").annotate(t=Sum("valor")):
+        m = mes_referencia_ciclo(r["data"], dia, ref)
+        totais[m] += r["t"] or ZERO
+    return dict(totais)
 
 
 def filtrar_escopo_lancamentos(qs, escopo: str):
@@ -172,7 +228,7 @@ def verificar_bloqueio_lancamento(
 ) -> str | None:
     if not data_ref:
         return None
-    mes_ref = inicio_mes(data_ref)
+    mes_ref = mes_referencia_atual(data_ref)
     if FechamentoMensal.objects.filter(mes=mes_ref, fechado=True).exists():
         return f"O mês {mes_ref:%m/%Y} está fechado. Reabra-o em Fechamento Mensal para alterar lançamentos."
     for c in (conta, conta_destino):
@@ -187,7 +243,8 @@ def verificar_bloqueio_lancamento(
 
 
 def lancamentos_do_mes(ini: date):
-    return Lancamento.objects.filter(data__gte=ini, data__lte=fim_mes(ini))
+    d_ini, d_fim = periodo_mes(ini)
+    return Lancamento.objects.filter(data__gte=d_ini, data__lte=d_fim)
 
 
 def despesas_por_categoria(qs):
@@ -211,10 +268,10 @@ def despesas_por_categoria(qs):
 
 
 def orcamento_mes(ini: date) -> list[dict[str, Any]]:
-    fim = fim_mes(ini)
+    d_ini, fim = periodo_mes(ini)
     orcamentos = list(
         Orcamento.objects.filter(ativo=True, vigencia_inicio__lte=fim)
-        .filter(Q(vigencia_fim__isnull=True) | Q(vigencia_fim__gte=ini))
+        .filter(Q(vigencia_fim__isnull=True) | Q(vigencia_fim__gte=d_ini))
         .select_related("categoria__pai", "centro")
     )
     if not orcamentos:
@@ -655,8 +712,9 @@ def resumo_veiculo(veiculo: Veiculo, ano: int) -> dict[str, Any]:
 
 
 def resumo_empresa(centro: CentroCusto, ini: date) -> dict[str, Any]:
-    inicio = somar_meses(ini, -11, dia=1)
-    fim = fim_mes(ini)
+    inicio_ref = somar_meses(ini, -11, dia=1)
+    inicio = periodo_mes(inicio_ref)[0]
+    d_ini_mes, fim = periodo_mes(ini)
     base = Lancamento.objects.filter(centro=centro, data__gte=inicio, data__lte=fim)
     entradas = por_mes(base.filter(tipo=Lancamento.RECEITA))
     impostos = por_mes(base.filter(tipo__in=[Lancamento.DESPESA, Lancamento.ESTORNO]).filter(IMPOSTO), liquido_despesa=True)
@@ -672,7 +730,7 @@ def resumo_empresa(centro: CentroCusto, ini: date) -> dict[str, Any]:
     )
     meses = []
     for k in range(12):
-        m = somar_meses(inicio, k, dia=1)
+        m = somar_meses(inicio_ref, k, dia=1)
         e, s, i = entradas.get(m, ZERO), saidas.get(m, ZERO), impostos.get(m, ZERO)
         meses.append({
             "mes": m,
@@ -685,13 +743,20 @@ def resumo_empresa(centro: CentroCusto, ini: date) -> dict[str, Any]:
         })
     totais = {k: sum((m[k] for m in meses), ZERO) for k in ("entradas", "saidas", "impostos", "resultado", "retiradas", "aportes")}
     do_mes = (
-        Lancamento.objects.filter(centro=centro, data__gte=ini, data__lte=fim)
+        Lancamento.objects.filter(centro=centro, data__gte=d_ini_mes, data__lte=fim)
         .exclude(tipo=Lancamento.TRANSFERENCIA)
         .select_related("categoria__pai", "conta", "cartao", "criado_por")
         .order_by("data", "id")
     )
+    d_ini_ano = periodo_mes(date(ini.year, 1, 1))[0]
+    d_fim_ano = periodo_mes(date(ini.year, 12, 1))[1]
     impostos_ano = (
-        Lancamento.objects.filter(centro=centro, tipo__in=[Lancamento.DESPESA, Lancamento.ESTORNO], data__year=ini.year)
+        Lancamento.objects.filter(
+            centro=centro,
+            tipo__in=[Lancamento.DESPESA, Lancamento.ESTORNO],
+            data__gte=d_ini_ano,
+            data__lte=d_fim_ano,
+        )
         .filter(IMPOSTO)
         .select_related("categoria__pai", "conta")
         .order_by("data")
@@ -708,7 +773,9 @@ def resumo_empresa(centro: CentroCusto, ini: date) -> dict[str, Any]:
 
 
 def resumo_anual(ano: int, escopo: str = "todos") -> dict[str, Any]:
-    base = filtrar_escopo_lancamentos(Lancamento.objects.filter(data__year=ano), escopo)
+    d_ini = periodo_mes(date(ano, 1, 1))[0]
+    d_fim = periodo_mes(date(ano, 12, 1))[1]
+    base = filtrar_escopo_lancamentos(Lancamento.objects.filter(data__gte=d_ini, data__lte=d_fim), escopo)
     receitas = por_mes(base.filter(tipo=Lancamento.RECEITA))
     despesas = por_mes(base.filter(tipo__in=[Lancamento.DESPESA, Lancamento.ESTORNO]), liquido_despesa=True)
     meses = []
@@ -739,6 +806,8 @@ def resumo_anual(ano: int, escopo: str = "todos") -> dict[str, Any]:
     total_despesas = sum((m["despesas"] for m in meses), ZERO)
     return {
         "meses": meses,
+        "periodo_inicio": d_ini,
+        "periodo_fim": d_fim,
         "total_receitas": total_receitas,
         "total_despesas": total_despesas,
         "total_resultado": total_receitas - total_despesas,

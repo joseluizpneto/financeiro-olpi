@@ -1246,6 +1246,12 @@ class ConfiguracaoSistema(models.Model):
 
     NOME_PADRAO = "OLPI"
     SUBTITULO_PADRAO = "Orçamento, Lançamentos, Patrimônio e Investimentos"
+    CICLO_SEGUINTE = "seguinte"
+    CICLO_ATUAL = "atual"
+    REFERENCIAS_CICLO = [
+        (CICLO_SEGUINTE, "Mês seguinte (ex.: 25/10 a 24/11 = Novembro)"),
+        (CICLO_ATUAL, "Mês de início (ex.: 05/11 a 04/12 = Novembro)"),
+    ]
 
     nome_sistema = models.CharField(
         "Nome do Sistema",
@@ -1258,17 +1264,39 @@ class ConfiguracaoSistema(models.Model):
         blank=True,
         default=SUBTITULO_PADRAO,
     )
+    dia_inicio_ciclo = models.PositiveSmallIntegerField(
+        "dia de início do ciclo mensal",
+        default=1,
+        validators=DIA_DO_MES,
+        help_text="Use 1 para mês calendário (01 a 31). Ex.: 25 para iniciar no dia em que o salário cai.",
+    )
+    referencia_ciclo = models.CharField(
+        "mês de referência do ciclo",
+        max_length=10,
+        choices=REFERENCIAS_CICLO,
+        default=CICLO_SEGUINTE,
+        help_text="Quando o ciclo não começa no dia 1, define qual mês dá nome ao período.",
+    )
 
     class Meta:
         verbose_name = "Configuração do Sistema"
         verbose_name_plural = "Configuração do Sistema"
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(dia_inicio_ciclo__gte=1, dia_inicio_ciclo__lte=31),
+                name="config_dia_inicio_ciclo_valido",
+            ),
+        ]
 
     def __str__(self) -> str:
         return self.nome_sistema or self.NOME_PADRAO
 
     def save(self, *args, **kwargs) -> None:
+        from django.core.cache import cache
+
         self.pk = 1
         super().save(*args, **kwargs)
+        cache.delete("config_ciclo_financeiro")
 
     @classmethod
     def carregar(cls) -> ConfiguracaoSistema:

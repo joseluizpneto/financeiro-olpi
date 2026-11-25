@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block titulo %}Ciclo financeiro{% endblock %}
+{% block conteudo %}
+<div class="page-head">
+  <h1>Ciclo financeiro</h1>
+  <a class="btn btn-outline-secondary" href="{% url 'config' %}"><i class="bi bi-arrow-left"></i> Voltar</a>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-body">
+        <form method="post" novalidate>
+          {% csrf_token %}
+          {% for campo in form %}{% include "financeiro/_campo.html" %}{% endfor %}
+          <div class="d-flex gap-2 mt-3">
+            <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg"></i> Salvar ciclo</button>
+            <a class="btn btn-outline-secondary" href="{% url 'config' %}">Cancelar</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card mb-3">
+      <div class="card-header">Ciclo atual em vigor</div>
+      <div class="card-body small">
+        <p class="mb-1"><strong>Mês de referência atual:</strong> <span class="text-capitalize">{{ mes_atual|date:"F \d\e Y" }}</span></p>
+        <p class="mb-0"><strong>Período apurado:</strong> {{ periodo_inicio|date:"d/m/Y" }} a {{ periodo_fim|date:"d/m/Y" }}</p>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">Como funciona</div>
+      <div class="card-body small text-body-secondary">
+        <p class="mb-2">Use <strong>dia 1</strong> para o mês calendário padrão (01 a 31).</p>
+        <p class="mb-2">Se os salários caem na última semana do mês (ex.: dia 25) para pagar as contas da última semana e do mês seguinte, configure <strong>Dia = 25</strong> com referência <strong>Mês seguinte</strong>: o período de 25/10 a 24/11 será apurado como <strong>Novembro</strong>.</p>
+        <p class="mb-0">Os saldos bancários e faturas de cartão continuam respeitando as datas reais de pagamento e fechamento.</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

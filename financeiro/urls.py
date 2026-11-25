@@ -58,6 +58,7 @@ urlpatterns = [
     path("rateio/", views.rateio, name="rateio"),
 
     path("configuracoes/", views.config_index, name="config"),
+    path("configuracoes/ciclo/", views.config_ciclo, name="config_ciclo"),
     path("configuracoes/regras/", views.regras_lista, name="regras_lista"),
     path("configuracoes/regras/nova/", views.regra_form, name="regra_nova"),
     path("configuracoes/regras/<int:pk>/", views.regra_form, name="regra_editar"),

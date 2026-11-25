@@ -11,13 +11,12 @@ from .. import services as sv
 from ..audit import registrar_auditoria
 from ..forms import MetaFinanceiraForm, OrcamentoForm
 from ..models import MetaFinanceira, Orcamento, RegistroAuditoria
-from ..utils import parse_mes
 from ._comum import _nav_mes, _render_form
 
 
 @login_required
 def orcamento(request: HttpRequest) -> HttpResponse:
-    ini = parse_mes(request.GET.get("mes"))
+    ini = sv.parse_mes_ciclo(request.GET.get("mes"))
     itens = sv.orcamento_mes(ini)
     total_limite, total_gasto = sv.totais_orcamento(itens)
     return render(

@@ -162,8 +162,8 @@ def conta_conciliar(request: HttpRequest, pk: int) -> HttpResponse:
 
 @login_required
 def fechamento_mensal(request: HttpRequest) -> HttpResponse:
-    ini = parse_mes(request.GET.get("mes"))
-    fim = fim_mes(ini)
+    ini = sv.parse_mes_ciclo(request.GET.get("mes"))
+    d_ini, fim = sv.periodo_mes(ini)
     fechamento = FechamentoMensal.objects.filter(mes=ini).first()
 
     qs_mes = sv.lancamentos_do_mes(ini)
@@ -172,6 +172,8 @@ def fechamento_mensal(request: HttpRequest) -> HttpResponse:
     pendentes_mes = qs_mes.filter(pago=False).exclude(tipo=Lancamento.PAGAMENTO_FATURA).count()
     nao_conciliados = qs_mes.filter(pago=True, cartao__isnull=True, conciliado=False).count()
     faturas_abertas = Fatura.objects.filter(referencia=ini, paga=False).count()
+    contas_fim = sv.saldos_contas(ate=fim)
+    saldo_contas_fim = sum((c.saldo_atual for c in contas_fim), sv.ZERO)
 
     if request.method == "POST":
         acao = request.POST.get("acao")
@@ -184,9 +186,12 @@ def fechamento_mensal(request: HttpRequest) -> HttpResponse:
                 obj.fechado_por = request.user
                 obj.fechado_em = timezone.now()
                 obj.resumo_snapshot = {
+                    "periodo_inicio": d_ini.isoformat(),
+                    "periodo_fim": fim.isoformat(),
                     "receitas": str(receitas),
                     "despesas": str(despesas),
                     "resultado": str(receitas - despesas),
+                    "saldo_contas": str(saldo_contas_fim),
                     "pendentes_mes": pendentes_mes,
                     "nao_conciliados": nao_conciliados,
                 }
@@ -229,6 +234,9 @@ def fechamento_mensal(request: HttpRequest) -> HttpResponse:
             "pendentes_mes": pendentes_mes,
             "nao_conciliados": nao_conciliados,
             "faturas_abertas": faturas_abertas,
+            "periodo_inicio": d_ini,
+            "periodo_fim": fim,
+            "saldo_contas_fim": saldo_contas_fim,
             "fim": fim,
             "historico": FechamentoMensal.objects.select_related("fechado_por").order_by("-mes")[:12],
         },

@@ -8,6 +8,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.utils.http import url_has_allowed_host_and_scheme
 
+from .. import services as sv
 from ..services import tem_empresa_ativa
 from ..utils import ano_valido, hoje, mes_str, somar_meses
 
@@ -32,13 +33,20 @@ def _nav_mes(request: HttpRequest, ini: date) -> dict[str, Any]:
         g.pop("data_fim", None)
         return g.urlencode()
 
+    mes_atual = sv.mes_referencia_atual()
+    d_ini, d_fim = sv.periodo_mes(ini)
+    dia_ciclo, _ = sv.obter_config_ciclo()
+
     return {
         "mes": ini,
         "atual": mes_str(ini),
         "qs_anterior": qs(somar_meses(ini, -1, dia=1)),
         "qs_proximo": qs(somar_meses(ini, 1, dia=1)),
-        "eh_mes_atual": ini == hoje().replace(day=1),
-        "qs_hoje": qs(hoje()),
+        "eh_mes_atual": ini == mes_atual,
+        "qs_hoje": qs(mes_atual),
+        "periodo_inicio": d_ini,
+        "periodo_fim": d_fim,
+        "ciclo_customizado": dia_ciclo != 1,
     }
 
 

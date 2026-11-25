@@ -8,14 +8,14 @@ from django.shortcuts import render
 
 from .. import services as sv
 from ..models import Conta, Veiculo
-from ..utils import hoje, parse_mes
+from ..utils import hoje
 from ._comum import ZERO, _escopo, _nav_mes
 
 
 @login_required
 def dashboard(request: HttpRequest) -> HttpResponse:
     sv.gerar_recorrencias(forcar=False)
-    ini = parse_mes(request.GET.get("mes"))
+    ini = sv.parse_mes_ciclo(request.GET.get("mes"))
     escopo = _escopo(request)
 
     contas_qs = sv.filtrar_escopo_contas(Conta.objects.filter(ativo=True).select_related("titular"), escopo)

@@ -1,6 +1,9 @@
 from .api import api_resumo, manifest_pwa
 from .cartoes import cartoes, fatura, fatura_mes, fatura_pagar
-from .config import config_excluir, config_form, config_index, config_lista, regra_excluir, regra_form, regras_lista
+from .config import (
+    config_ciclo, config_excluir, config_form, config_index, config_lista, regra_excluir, regra_form,
+    regras_lista,
+)
 from .contas import a_vencer, conta_conciliar, conta_extrato, fechamento_mensal
 from .lancamentos import (
     comprovante_download, exportar_csv, importar_extrato, lancamento_conciliar, lancamento_excluir,
@@ -56,6 +59,7 @@ __all__ = [
     "relatorios",
     "rateio",
     "config_index",
+    "config_ciclo",
     "config_lista",
     "config_form",
     "config_excluir",

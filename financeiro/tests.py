@@ -1406,3 +1406,108 @@ class FormasPagamentoTests(Base):
         r_filt = self.client.get(reverse("lancamentos") + "?forma=dinheiro")
         self.assertContains(r_filt, "Padaria Dinheiro")
         self.assertNotContains(r_filt, "Compra Débito")
+
+
+class CicloFinanceiroTests(Base):
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user("tester_ciclo", "c@example.com", "SenhaForte#123")
+        self.client.force_login(self.user)
+        self.salario_cat = Categoria.objects.create(nome="Salário", tipo="R")
+
+    def test_funcoes_puras_ciclo_sem_lacunas_ou_sobreposicoes(self):
+        from .utils import intervalo_ciclo, mes_referencia_ciclo
+
+        self.assertEqual(intervalo_ciclo(date(2026, 11, 1), 1, "seguinte"), (date(2026, 11, 1), date(2026, 11, 30)))
+        self.assertEqual(intervalo_ciclo(date(2026, 11, 1), 25, "seguinte"), (date(2026, 10, 25), date(2026, 11, 24)))
+        self.assertEqual(intervalo_ciclo(date(2026, 11, 1), 25, "atual"), (date(2026, 11, 25), date(2026, 12, 24)))
+        self.assertEqual(intervalo_ciclo(date(2024, 3, 1), 30, "seguinte"), (date(2024, 2, 29), date(2024, 3, 29)))
+
+        for dia in (1, 25, 30):
+            for ref_modo in ("seguinte", "atual"):
+                # Partição exata em ano normal (2025) e bissexto (2024)
+                for ano in (2024, 2025):
+                    d = date(ano, 1, 1)
+                    while d.year == ano:
+                        m_ref = mes_referencia_ciclo(d, dia, ref_modo)
+                        ini, fim = intervalo_ciclo(m_ref, dia, ref_modo)
+                        self.assertLessEqual(ini, d)
+                        self.assertGreaterEqual(fim, d)
+                        d += timedelta(days=1)
+
+    def test_lancamentos_por_mes_resumo_anual_e_bloqueio_com_ciclo_customizado(self):
+        cfg = ConfiguracaoSistema.carregar()
+        cfg.dia_inicio_ciclo = 25
+        cfg.referencia_ciclo = ConfiguracaoSistema.CICLO_SEGUINTE
+        cfg.save()
+
+        # Salário em 28/10 entra no ciclo de Novembro (25/10 a 24/11)
+        sal_nov = Lancamento.objects.create(
+            tipo="R",
+            descricao="Salário Nov",
+            valor=D("5000.00"),
+            data=date(2026, 10, 28),
+            pago=True,
+            conta=self.conta,
+            categoria=self.salario_cat,
+        )
+        # Despesa em 24/10 fica no ciclo de Outubro (25/09 a 24/10)
+        desp_out = Lancamento.objects.create(
+            tipo="D",
+            descricao="Mercado Out",
+            valor=D("400.00"),
+            data=date(2026, 10, 24),
+            pago=True,
+            conta=self.conta,
+            categoria=self.mercado,
+        )
+
+        ids_out = set(sv.lancamentos_do_mes(date(2026, 10, 1)).values_list("pk", flat=True))
+        ids_nov = set(sv.lancamentos_do_mes(date(2026, 11, 1)).values_list("pk", flat=True))
+        self.assertEqual(ids_out, {desp_out.pk})
+        self.assertEqual(ids_nov, {sal_nov.pk})
+
+        rec_por_mes = sv.por_mes(Lancamento.objects.filter(tipo="R"))
+        self.assertEqual(rec_por_mes.get(date(2026, 11, 1)), D("5000.00"))
+        self.assertNotIn(date(2026, 10, 1), rec_por_mes)
+
+        anual = sv.resumo_anual(2026)
+        nov_item = next(m for m in anual["meses"] if m["mes"] == date(2026, 11, 1))
+        out_item = next(m for m in anual["meses"] if m["mes"] == date(2026, 10, 1))
+        self.assertEqual(nov_item["receitas"], D("5000.00"))
+        self.assertEqual(out_item["despesas"], D("400.00"))
+
+        # Fechar Novembro bloqueia edição de lançamento em 28/10
+        FechamentoMensal.objects.create(mes=date(2026, 11, 1), fechado=True)
+        self.assertIsNotNone(sv.verificar_bloqueio_lancamento(date(2026, 10, 28), conta=self.conta))
+        self.assertIsNone(sv.verificar_bloqueio_lancamento(date(2026, 10, 24), conta=self.conta))
+
+    def test_views_config_ciclo_dashboard_e_fechamento(self):
+        r_get = self.client.get(reverse("config_ciclo"))
+        self.assertEqual(r_get.status_code, 200)
+
+        r_post = self.client.post(
+            reverse("config_ciclo"),
+            {"dia_inicio_ciclo": 25, "referencia_ciclo": ConfiguracaoSistema.CICLO_SEGUINTE},
+        )
+        self.assertEqual(r_post.status_code, 302)
+        self.assertEqual(sv.obter_config_ciclo(), (25, ConfiguracaoSistema.CICLO_SEGUINTE))
+
+        Lancamento.objects.create(
+            tipo="R",
+            descricao="Salário Ciclo",
+            valor=D("3000.00"),
+            data=date(2026, 10, 27),
+            pago=True,
+            conta=self.conta,
+            categoria=self.salario_cat,
+        )
+        r_dash = self.client.get(reverse("dashboard") + "?mes=2026-11")
+        self.assertEqual(r_dash.status_code, 200)
+        self.assertContains(r_dash, "Ciclo: 25/10 a 24/11")
+        self.assertContains(r_dash, "3.000,00")
+
+        r_fech = self.client.get(reverse("fechamento_mensal") + "?mes=2026-11")
+        self.assertEqual(r_fech.status_code, 200)
+        self.assertContains(r_fech, "25/10/2026 a 24/11/2026")
+        self.assertContains(r_fech, "Saldo em contas em 24/11/2026")

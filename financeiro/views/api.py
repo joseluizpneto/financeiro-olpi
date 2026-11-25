@@ -8,7 +8,7 @@ from .. import services as sv
 from ..context_processors import obter_identidade_sistema
 from ..models import Conta
 from ..security import autenticar_token_api
-from ..utils import hoje, inicio_mes
+from ..utils import hoje
 
 
 def api_resumo(request: HttpRequest) -> JsonResponse:
@@ -17,7 +17,8 @@ def api_resumo(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"erro": "Token inválido ou ausente."}, status=401)
 
     h = hoje()
-    ini = inicio_mes(h)
+    ini = sv.mes_referencia_atual(h)
+    d_ini, d_fim = sv.periodo_mes(ini)
     contas = sv.saldos_contas(Conta.objects.filter(ativo=True).select_related("titular"), ate=h)
     qs_mes = sv.lancamentos_do_mes(ini)
     receitas = sv.soma(qs_mes.filter(tipo="R"))
@@ -32,6 +33,8 @@ def api_resumo(request: HttpRequest) -> JsonResponse:
         ],
         "mes": {
             "referencia": ini.strftime("%Y-%m"),
+            "periodo_inicio": d_ini.isoformat(),
+            "periodo_fim": d_fim.isoformat(),
             "receitas": str(receitas),
             "despesas": str(despesas),
             "resultado": str(receitas - despesas),

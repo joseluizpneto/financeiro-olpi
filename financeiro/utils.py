@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import calendar
-from datetime import date
+from datetime import date, timedelta
 
 from django.utils import timezone
 
@@ -38,8 +38,41 @@ def fim_mes(d: date) -> date:
     return d.replace(day=calendar.monthrange(d.year, d.month)[1])
 
 
-def parse_mes(valor: str | None, padrao: date | None = None) -> date:
-    """Converte 'AAAA-MM' no primeiro dia do mês; se inválido, usa o mês atual."""
+def intervalo_ciclo(ref: date, dia_inicio: int = 1, referencia: str = "seguinte") -> tuple[date, date]:
+    """Retorna (data_inicio, data_fim) do ciclo financeiro correspondente ao mês `ref`."""
+    ref = ref.replace(day=1)
+    dia = min(max(int(dia_inicio or 1), 1), 31)
+    if dia == 1:
+        return ref, fim_mes(ref)
+    if referencia == "atual":
+        ini = somar_meses(ref, 0, dia=dia)
+        prox = somar_meses(ref, 1, dia=dia)
+    else:
+        ini = somar_meses(ref, -1, dia=dia)
+        prox = somar_meses(ref, 0, dia=dia)
+    return ini, prox - timedelta(days=1)
+
+
+def mes_referencia_ciclo(d: date, dia_inicio: int = 1, referencia: str = "seguinte") -> date:
+    """Retorna o 1º dia do mês de referência ao qual a data `d` pertence no ciclo."""
+    dia = min(max(int(dia_inicio or 1), 1), 31)
+    base = d.replace(day=1)
+    if dia == 1:
+        return base
+    corte = dia_seguro(d.year, d.month, dia)
+    if referencia == "atual":
+        return base if d.day >= corte else somar_meses(base, -1, dia=1)
+    return somar_meses(base, 1, dia=1) if d.day >= corte else base
+
+
+def parse_mes(
+    valor: str | None,
+    padrao: date | None = None,
+    *,
+    dia_inicio: int = 1,
+    referencia: str = "seguinte",
+) -> date:
+    """Converte 'AAAA-MM' no primeiro dia do mês; se inválido, usa o mês de referência atual."""
     if valor:
         try:
             ano_s, mes_s = valor.split("-")[:2]
@@ -48,7 +81,7 @@ def parse_mes(valor: str | None, padrao: date | None = None) -> date:
                 return date(ano, mes, 1)
         except (ValueError, TypeError):
             pass
-    return inicio_mes(padrao or hoje())
+    return mes_referencia_ciclo(padrao or hoje(), dia_inicio=dia_inicio, referencia=referencia)
 
 
 def mes_str(d: date) -> str:

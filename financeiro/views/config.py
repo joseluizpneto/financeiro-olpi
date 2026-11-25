@@ -13,9 +13,10 @@ from django.views.decorators.http import require_POST
 
 from .. import services as sv
 from ..audit import registrar_auditoria
-from ..forms import ConfigForm, RegraCategorizacaoForm, categorias_qs
+from ..forms import CicloFinanceiroForm, ConfigForm, RegraCategorizacaoForm, categorias_qs
 from ..models import (
-    Cartao, Categoria, CentroCusto, Conta, RegistroAuditoria, RegraCategorizacao, Titular, Veiculo,
+    Cartao, Categoria, CentroCusto, ConfiguracaoSistema, Conta, RegistroAuditoria, RegraCategorizacao,
+    Titular, Veiculo,
 )
 from ._comum import _render_form, _voltar
 
@@ -36,7 +37,7 @@ CONFIG = OrderedDict([
         "descricao": "Contas correntes, poupanças, carteira em dinheiro.",
         "campos": [
             "banco", "tipo", "titular", "saldo_inicial", "data_saldo_inicial",
-            "centro_padrao", "conciliado_ate", "bloqueado_ate", "ativo",
+            "centro_padrao", "bloqueado_ate", "ativo",
         ],
         "colunas": ["banco", "titular", "tipo", "saldo_atual", "ativo"],
         "relacionados": ["titular"],
@@ -90,12 +91,46 @@ def _config(slug: str) -> dict:
 @login_required
 def config_index(request: HttpRequest) -> HttpResponse:
     itens = [{"slug": s, **c, "total": c["modelo"].objects.count()} for s, c in CONFIG.items()]
+    dia_ciclo, ref_ciclo = sv.obter_config_ciclo()
     return render(
         request,
         "financeiro/config_index.html",
         {
             "itens": itens,
             "total_regras": RegraCategorizacao.objects.count(),
+            "dia_ciclo": dia_ciclo,
+            "ref_ciclo": ref_ciclo,
+        },
+    )
+
+
+@login_required
+def config_ciclo(request: HttpRequest) -> HttpResponse:
+    cfg = ConfiguracaoSistema.carregar()
+    form = CicloFinanceiroForm(request.POST or None, instance=cfg)
+    if request.method == "POST" and form.is_valid():
+        obj = form.save()
+        registrar_auditoria(
+            request.user,
+            RegistroAuditoria.EDITAR,
+            obj,
+            f"Alterou ciclo financeiro: dia {obj.dia_inicio_ciclo} ({obj.referencia_ciclo})",
+            {"dia_inicio_ciclo": obj.dia_inicio_ciclo, "referencia_ciclo": obj.referencia_ciclo},
+            request=request,
+        )
+        messages.success(request, "Ciclo financeiro atualizado.")
+        return redirect("config")
+    mes_atual = sv.mes_referencia_atual()
+    d_ini, d_fim = sv.periodo_mes(mes_atual)
+    return render(
+        request,
+        "financeiro/config_ciclo.html",
+        {
+            "form": form,
+            "cfg": cfg,
+            "mes_atual": mes_atual,
+            "periodo_inicio": d_ini,
+            "periodo_fim": d_fim,
         },
     )
 

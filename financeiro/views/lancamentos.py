@@ -25,7 +25,7 @@ from ..forms import ImportacaoForm, LancamentoForm, categorias_qs
 from ..importacao import analisar_arquivo_extrato, confirmar_importacao
 from ..models import Cartao, Categoria, CentroCusto, Conta, Lancamento, RegistroAuditoria
 from ..security import csv_seguro
-from ..utils import fim_mes, hoje, mes_str, parse_data, parse_mes
+from ..utils import hoje, mes_str, parse_data
 from ._comum import _nav_mes, _render_form, _voltar
 
 User = get_user_model()
@@ -38,7 +38,7 @@ class _Echo:
 
 def _filtrar_lancamentos(request: HttpRequest):
     g = request.GET
-    ini = parse_mes(g.get("mes"))
+    ini = sv.parse_mes_ciclo(g.get("mes"))
     qs = Lancamento.objects.select_related(
         "conta__titular",
         "conta_destino__titular",
@@ -71,7 +71,8 @@ def _filtrar_lancamentos(request: HttpRequest):
         if data_fim:
             qs = qs.filter(data_efetiva__lte=data_fim)
     elif not todos:
-        qs = qs.filter(data_efetiva__gte=ini, data_efetiva__lte=fim_mes(ini))
+        d_ini_ciclo, d_fim_ciclo = sv.periodo_mes(ini)
+        qs = qs.filter(data_efetiva__gte=d_ini_ciclo, data_efetiva__lte=d_fim_ciclo)
     conta = g.get("conta", "")
     if conta.isdigit():
         qs = qs.filter(Q(conta_id=conta) | Q(conta_destino_id=conta))
@@ -95,11 +96,6 @@ def _filtrar_lancamentos(request: HttpRequest):
         qs = qs.filter(pago=False)
     elif situacao == "atrasado":
         qs = qs.filter(pago=False, vencimento__lt=hoje())
-    conciliado = g.get("conciliado", "")
-    if conciliado == "sim":
-        qs = qs.filter(conciliado=True)
-    elif conciliado == "nao":
-        qs = qs.filter(conciliado=False)
     busca = g.get("q", "").strip()
     if busca:
         qs = qs.filter(Q(descricao__icontains=busca) | Q(observacao__icontains=busca))
@@ -122,7 +118,7 @@ def lancamentos(request: HttpRequest) -> HttpResponse:
         request.GET.get(k)
         for k in (
             "conta", "cartao", "centro", "categoria", "tipo", "forma", "situacao",
-            "q", "veiculo", "criado_por", "conciliado", "data_ini", "data_fim",
+            "q", "veiculo", "criado_por", "data_ini", "data_fim",
         )
     )
     return render(
